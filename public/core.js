@@ -100,6 +100,22 @@ const VERIFY = {
       if (v < LIMIT) return [v % 37 === g.number, `winning number ${v % 37}`];
     }
   },
+  async penalty(g) {
+    const LIMIT = Math.floor(2 ** 32 / 5) * 5, dives = [];
+    for (let i = 0; i < 5; i++) for (let j = 0; ; j++) {
+      const v = parseInt((await sha256(`${g.seed}:${i}:${j}`)).slice(0, 8), 16);
+      if (v < LIMIT) { dives.push(v % 5); break; }
+    }
+    return [dives.join() === g.keepers.join(), `keeper dives ${dives.map(d => d + 1).join(' ')}`];
+  },
+  async hilo(g) {
+    const LIMIT = Math.floor(2 ** 32 / 52) * 52, ranks = [];
+    for (let i = 0; i < g.cards.length; i++) for (let j = 0; ; j++) {
+      const v = parseInt((await sha256(`${g.seed}:${i}:${j}`)).slice(0, 8), 16);
+      if (v < LIMIT) { ranks.push(2 + ((v % 52) % 13)); break; }
+    }
+    return [ranks.join() === g.cards.map(c => c.rank).join(), `${ranks.length} cards match`];
+  },
   async crash(g) {
     const r = parseInt((await sha256(g.seed)).slice(0, 13), 16) / 2 ** 52;
     const c = Math.min(100000, Math.max(100, Math.floor(95 / (1 - r)))) / 100;

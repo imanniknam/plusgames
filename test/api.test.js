@@ -9,7 +9,7 @@ if (process.env.TEST_DATABASE_URL) process.env.DATABASE_URL = process.env.TEST_D
 process.env.BOT_TOKEN = '123:TEST';
 process.env.WEBHOOK_SECRET = 'hook';
 process.env.APP_URL = 'https://example.test/index.html';
-process.env.ENABLED_GAMES = 'mines,crash,roulette,poop'; // production shows Mines only; the suite still covers every game
+process.env.ENABLED_GAMES = 'mines,penalty,hilo,crash,roulette,poop'; // production shows a subset; the suite still covers every game
 const { default: app } = await import('../server.js');
 const { verifyInitData } = await import('../lib/telegram.js');
 const mines = await import('../lib/games/mines.js');
@@ -333,7 +333,7 @@ test('daily bonus once per 24h under parallel claims', async () => {
   assert.equal(await balance(c), 1100);
 });
 
-test('referral: only a brand-new user via the bot credits the inviter, never self', async () => {
+test('referral: only a brand-new user via the bot credits both sides, never self', async () => {
   const inviter = client();
   await inviter('GET', '/state');
   const hook = (from, text) => fetch(origin + '/bot', {
@@ -343,10 +343,10 @@ test('referral: only a brand-new user via the bot credits the inviter, never sel
   assert.equal((await fetch(origin + '/bot', { method: 'POST' })).status, 401);
   const newbie = --uidSeq;
   assert.equal((await hook(newbie, `/start ref_${inviter.uid}`)).status, 200);
-  assert.equal(await balance(inviter), 1200);
+  assert.equal(await balance(inviter), 1100); // signup step: +100
   await hook(newbie, `/start ref_${inviter.uid}`); // existing user again: no second reward
   await hook(inviter.uid, `/start ref_${inviter.uid}`); // self
-  assert.equal(await balance(inviter), 1200);
+  assert.equal(await balance(inviter), 1100);
   assert.equal((await inviter('GET', '/state')).user.invited, 1);
-  assert.equal(await balance(client(newbie)), 1000);
+  assert.equal(await balance(client(newbie)), 1300); // 1000 + 300 welcome
 });

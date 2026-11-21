@@ -6,6 +6,10 @@ import { GEM, I } from './icons.js';
 const ALL_GAMES = {
   mines: { mount: mines, icon: GEM, name: 'Mines', title: 'Mines', sub: 'Find safe tiles. Avoid the mines.', tag: 'Risk & Strategy', max: '34.20x',
     help: '💎 <b>Mines</b> — 3×3 board, 2 bombs. Each safe tile raises the multiplier; cash out any time.' },
+  penalty: { load: () => import('./games/penalty.js'), icon: '⚽', name: 'Penalty', title: 'Penalty', sub: 'Pick a corner. Beat the keeper.', tag: 'Football', max: '2.89x',
+    help: '⚽ <b>Penalty</b> — up to 5 shots; the keeper saves 1 corner in 5. Each goal raises the multiplier; cash out any time.' },
+  hilo: { load: () => import('./games/hilo.js'), icon: '🃏', name: 'Higher or Lower', title: 'Higher or Lower', sub: 'Will the next card be higher or lower?', tag: 'Cards', max: '10k coins',
+    help: '🃏 <b>Higher or Lower</b> — guess the next card; a same rank wins both ways. Each right guess multiplies; cash out any time.' },
   crash: { load: () => import('./games/crash.js'), icon: '🚀', name: 'Crash', title: 'Crash', sub: 'Cash out before it blows!', tag: 'High Multiplier', max: '1000x',
     help: '🚀 <b>Crash</b> — the multiplier climbs from 1.00x. Cash out before it crashes, or set auto cash-out.' },
   roulette: { load: () => import('./games/roulette.js'), icon: '🎡', name: 'Roulette', title: 'European Roulette', sub: 'Place your bet and spin the wheel.', tag: 'Classic & Elegant', max: '36x',
@@ -18,7 +22,7 @@ const ALL_GAMES = {
 const GAMES = {};
 const isGame = k => typeof k === 'string' && Object.hasOwn(GAMES, k);
 const RLABEL = { red: '🔴 Red', black: '⚫ Black', odd: 'Odd', even: 'Even' };
-const KIND = { signup: [I.spark, 'Welcome bonus'], bonus: [I.gift, 'Daily bonus'], referral: [I.users, 'Friend joined'] };
+const KIND = { signup: [I.spark, 'Welcome bonus'], bonus: [I.gift, 'Daily bonus'], referral: [I.users, 'Invite reward'], welcome: [I.users, 'Invited by a friend'], rescue: [I.gift, 'Rescue coins'] };
 
 let screen = null, mounted = null, activeGame = null, histFilter = '', openSheet = '';
 
@@ -44,12 +48,12 @@ const nativeBack = !!tg?.initData || (!!tg?.BackButton && tg.isVersionAtLeast?.(
 function go(to) {
   mounted?.destroy(); mounted = null;
   screen = to;
-  const root = $('#screen'), inGame = isGame(to), sub = inGame || to === 'top';
+  const root = $('#screen'), inGame = isGame(to), sub = inGame || to === 'top' || to === 'invites';
   root.innerHTML = '';
   // inside Telegram the header already has a native back arrow; a second one only crowds the screen
   $('#back').hidden = !sub || nativeBack;
   if (tg?.BackButton) sub ? tg.BackButton.show() : tg.BackButton.hide();
-  document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === (inGame ? 'home' : to === 'top' ? 'profile' : to)));
+  document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === (inGame ? 'home' : to === 'top' || to === 'invites' ? 'profile' : to)));
   document.body.classList.toggle('in-game', inGame); // game screens fit the viewport exactly: no page scroll
   scrollTo(0, 0);
   if (!inGame) {
@@ -76,7 +80,7 @@ function nav(to) {
   const before = `${activeGame?.id}|${S.user?.bonusAt}`;
   loadState().then(() => { if (screen === to && to === 'home' && `${activeGame?.id}|${S.user.bonusAt}` !== before) RENDER.home(); }).catch(() => {});
 }
-const back = () => { haptic('impactOccurred', 'light'); nav(screen === 'top' ? 'profile' : 'home'); };
+const back = () => { haptic('impactOccurred', 'light'); nav(screen === 'top' || screen === 'invites' ? 'profile' : 'home'); };
 $('#back').onclick = back;
 tg?.BackButton?.onClick(back);
 addEventListener('active-game', e => isGame(e.detail) && setTimeout(() => loadState().catch(() => {}).finally(() => go(e.detail)), 900));
@@ -90,21 +94,30 @@ $('#plus').onclick = () => S.user && go('wallet');
 
 // ---------- shared bits ----------
 const bonusLeft = () => S.user.bonusAt - Date.now();
-const bonusLabel = () => { const l = bonusLeft(); return l <= 0 ? `+${S.config.dailyBonus}` : `${Math.floor(l / 3.6e6)}h ${Math.floor(l % 3.6e6 / 6e4)}m`; };
+const bonusLabel = () => { const l = bonusLeft(); return l <= 0 ? `+${S.user.bonusNext}` : `${Math.floor(l / 3.6e6)}h ${Math.floor(l % 3.6e6 / 6e4)}m`; };
+const inviteReward = () => S.config.referral.signup + S.config.referral.active;
 const signed = n => `${n >= 0 ? '+' : '−'}${fmt(Math.abs(n))}`;
 
 async function claimBonus() {
   try {
     const r = await api('/bonus', {});
-    setBalance(r.balance); S.user.bonusAt = r.bonusAt;
-    haptic('notificationOccurred', 'success'); toast(`+${S.config.dailyBonus} coins! Come back tomorrow`);
+    setBalance(r.balance); Object.assign(S.user, { bonusAt: r.bonusAt, bonusDay: r.bonusDay, bonusNext: r.bonusNext });
+    haptic('notificationOccurred', 'success'); toast(`+${r.amount} coins! Tomorrow: +${r.bonusNext}`);
+  } catch (e) { toast(e.message); await loadState().catch(() => {}); }
+  RENDER[screen]?.();
+}
+async function rescue() {
+  try {
+    const r = await api('/rescue', {});
+    setBalance(r.balance); S.user.rescue = r.rescue;
+    haptic('notificationOccurred', 'success'); toast(`+${S.config.rescue} coins to get you playing again`);
   } catch (e) { toast(e.message); await loadState().catch(() => {}); }
   RENDER[screen]?.();
 }
 function invite() {
   if (!S.config.bot) return toast('Invites are not available yet');
   const link = `https://t.me/${S.config.bot}?start=ref_${S.user.id}`;
-  const share = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(`🎮 Play ${Object.values(GAMES).map(m => m.name).join(', ')} with free coins!`)}`;
+  const share = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(`🎮 Play ${Object.values(GAMES).map(m => m.name).join(', ')} with me! You get ${1000 + S.config.referral.welcome} free coins.`)}`;
   if (tg?.openTelegramLink) tg.openTelegramLink(share);
   else navigator.clipboard?.writeText(link).then(() => toast('Invite link copied'));
 }
@@ -112,6 +125,8 @@ function invite() {
 function gameRow(g) {
   const m = ALL_GAMES[g.game];
   const detail = g.game === 'mines' ? `${g.safe} 💎 · ${g.multiplier.toFixed(2)}x`
+    : g.game === 'penalty' ? `${g.goals}/5 goals${g.won ? ` · ${g.multiplier.toFixed(2)}x` : ''}`
+    : g.game === 'hilo' ? `${g.correct} right${g.won ? ` · ${g.multiplier.toFixed(2)}x` : ''}`
     : g.game === 'poop' ? `${g.stage}/5 stages${g.won ? ` · ${g.multiplier.toFixed(2)}x` : ''}`
     : g.game === 'crash' ? `crashed ${g.crash.toFixed(2)}x${g.won ? ` · out ${g.multiplier.toFixed(2)}x` : ''}`
     : `${g.type === 'number' ? '#' + g.pick : RLABEL[g.type]} · landed ${g.number}`;
@@ -129,13 +144,16 @@ const RENDER = {
       <div class="hello panel"><span class="avatar">${esc((S.user.name || 'P')[0].toUpperCase())}</span>
         <div><small>${greet},</small><b>${esc(S.user.name || 'Player')}!</b></div>
         <div class="lvl" data-lvl>Lv. …<i></i></div></div>
+      ${S.user.rescue?.available ? `<div class="promo rescue"><div><small>Out of coins?</small><b>Here's ${S.config.rescue}<br>to keep playing</b>
+          <button type="button" class="claim" data-act="rescue">Get +${S.config.rescue}</button></div><span class="promo-art">${I.spark}</span></div>` : ''}
       <div class="promo">
-        <div><small>Daily reward</small><b>Free coins<br>every day</b>
-          <button type="button" class="claim" data-act="bonus" ${bonusLeft() > 0 ? 'disabled' : ''}>${bonusLeft() > 0 ? `Next in ${bonusLabel()}` : `Claim +${S.config.dailyBonus}`}</button></div>
+        <div><small>Daily reward · day ${S.user.bonusDay} of 7</small><b>Free coins<br>every day</b>
+          <div class="streak" aria-label="Day ${S.user.bonusDay} of 7">${S.config.dailySteps.map((v, d) => `<i class="${d < S.user.bonusDay - (bonusLeft() > 0 ? 0 : 1) ? 'done' : ''} ${d === S.user.bonusDay - 1 ? 'now' : ''}">${v}</i>`).join('')}</div>
+          <button type="button" class="claim" data-act="bonus" ${bonusLeft() > 0 ? 'disabled' : ''}>${bonusLeft() > 0 ? `Next in ${bonusLabel()}` : `Claim +${S.user.bonusNext}`}</button></div>
         <span class="promo-art">${I.gift}</span>
       </div>
       <div class="quick">
-        <button type="button" class="panel" data-act="invite">${I.users}<span>Invite <b>+${S.config.referralBonus}</b></span></button>
+        <button type="button" class="panel" data-act="invite">${I.users}<span>Invite <b>+${inviteReward()}</b></span></button>
         <button type="button" class="panel" data-act="top">${I.trophy}<span>Leaderboard</span></button>
       </div>
       <div class="sec-title">Featured Games</div>
@@ -159,8 +177,9 @@ const RENDER = {
         <div class="big">${COIN}<span>${fmt(S.user.balance)}</span></div>
         <div class="acts">
           <button type="button" class="btn-green" data-act="bonus" ${bonusLeft() > 0 ? 'disabled' : ''}>${I.gift}Daily ${bonusLabel()}</button>
-          <button type="button" class="btn2" data-act="invite">${I.users}Invite +${S.config.referralBonus}</button>
+          <button type="button" class="btn2" data-act="invite">${I.users}Invite +${inviteReward()}</button>
         </div>
+        ${S.user.rescue?.available ? `<button type="button" class="btn-green wide" data-act="rescue">${I.spark}Out of coins? Get +${S.config.rescue}</button>` : ''}
         <p class="note">Virtual coins only — no deposits or withdrawals.</p></div>
       <div class="sec-title">Transactions</div>
       <ul class="list" data-list><li class="empty">Loading…</li></ul>`;
@@ -201,7 +220,7 @@ const RENDER = {
       <div class="stats" data-stats>${['Rounds', 'Win rate', 'Net', 'Best'].map(l => `<div class="panel"><b>…</b><small>${l}</small></div>`).join('')}</div>
       <div class="menu">
         <button type="button" class="panel" data-act="top"><span>${I.trophy}</span>Leaderboard<span>${I.chevron}</span></button>
-        <button type="button" class="panel" data-act="invite"><span>${I.users}</span>Invite friends · ${S.user.invited} joined<span>${I.chevron}</span></button>
+        <button type="button" class="panel" data-act="invites"><span>${I.users}</span>Invite friends · ${S.user.invited} joined<span>${I.chevron}</span></button>
         ${item('fair', I.shield, 'Provably fair')}
         ${item('help', I.help, 'How to play')}
       </div>`;
@@ -215,8 +234,29 @@ const RENDER = {
     } catch {}
   },
 
+  async invites() {
+    const R = S.config.referral;
+    $('#screen').innerHTML = `
+      <div class="sec-title" style="margin-top:4px">Invite friends</div>
+      <div class="panel invite-card">
+        <p>Your friend gets <b>+${R.welcome}</b> coins on top of the usual 1,000. You get <b>+${R.signup}</b> when they join,
+          and <b>+${R.active}</b> once they have played ${R.rounds} rounds on ${R.days} different days within ${R.windowDays} days.</p>
+        <button type="button" class="play" data-act="invite">${I.users}Share my link</button>
+      </div>
+      <div class="sec-title">Your friends</div>
+      <ul class="list" data-list><li class="empty">Loading…</li></ul>`;
+    try {
+      const { items } = await api('/referrals');
+      const label = f => f.status === 'active' ? `<span class="pos">+${R.active} earned</span>` : f.status === 'expired' ? '<span class="muted">Expired</span>'
+        : `<span class="muted">${f.rounds}/${R.rounds} rounds</span>`;
+      $('[data-list]').innerHTML = items.map(f => `<li class="row panel"><span class="gi">${I.users}</span>
+        <div class="mid"><b>${esc(f.name)}</b><small>joined ${ago(f.at)}${f.rewarded ? '' : ' · over the monthly limit'}</small></div>
+        <div class="end">${label(f)}</div></li>`).join('') || '<li class="empty">No friends yet: share your link!</li>';
+    } catch (e) { listError(e); }
+  },
+
   async top() {
-    $('#screen').innerHTML = `<div class="sec-title" style="margin-top:4px">🏆 Leaderboard <small class="muted">by virtual profit</small></div><ol class="list" data-list><li class="empty">Loading…</li></ol>`;
+    $('#screen').innerHTML = `<div class="sec-title" style="margin-top:4px">🏆 This week <small class="muted">by virtual profit · resets Saturday</small></div><ol class="list" data-list><li class="empty">Loading…</li></ol>`;
     try {
       const { top } = await api('/leaderboard');
       $('[data-list]').innerHTML = top.map((p, i) => `<li class="row panel ${p.me ? 'me' : ''}"><span class="gi">${['🥇', '🥈', '🥉'][i] ?? i + 1}</span>
@@ -236,6 +276,8 @@ $('#screen').addEventListener('click', e => {
   if (!act || act.disabled) return;
   if (act.dataset.act === 'bonus') { act.disabled = true; return claimBonus(); }
   if (act.dataset.act === 'invite') return invite();
+  if (act.dataset.act === 'rescue') { act.disabled = true; return rescue(); }
+  if (act.dataset.act === 'invites') return go('invites');
   if (act.dataset.act === 'top') return go('top');
 });
 
@@ -266,7 +308,9 @@ const seen = () => { try { return localStorage.getItem('pg_seen') === '1'; } cat
     $('#screen').innerHTML = `<div class="empty" style="padding-top:80px">${esc(e.message)}<br><br><button type="button" class="cta inline" onclick="location.reload()">Try again</button></div>`;
     return;
   }
-  setTimeout(fx.init, 300); // effects arrive after the first screen is already usable
+  // Effects arrive once the first screen has settled: parsing GSAP is a ~100ms main-thread job on a mid-range phone,
+  // and at 300ms it landed right on the splash outro and the first board render, which read as a stutter.
+  (window.requestIdleCallback ?? (f => setTimeout(f, 1200)))(() => fx.init(), { timeout: 2500 });
   setInterval(() => { if (screen === 'home') RENDER.home(); }, 60000);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && S.user && !isGame(screen)) loadState().then(() => RENDER[screen]?.()).catch(() => {});
