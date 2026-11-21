@@ -24,6 +24,9 @@ const isGame = k => typeof k === 'string' && Object.hasOwn(GAMES, k);
 const RLABEL = { red: '🔴 Red', black: '⚫ Black', odd: 'Odd', even: 'Even' };
 const KIND = { signup: [I.spark, 'Welcome bonus'], bonus: [I.gift, 'Daily bonus'], referral: [I.users, 'Invite reward'], welcome: [I.users, 'Invited by a friend'], rescue: [I.gift, 'Rescue coins'] };
 
+// coin packs shown in the shop (amount + bonus); prices come once a payment method is chosen
+const PACKS = [{ coins: 1000 }, { coins: 5500, bonus: 10 }, { coins: 12000, bonus: 20, tag: 'Popular' }, { coins: 32500, bonus: 30, tag: 'Best value' }];
+
 let screen = null, mounted = null, activeGame = null, histFilter = '', openSheet = '';
 
 // XP = coins wagered; level n needs 50·(n−1)² XP
@@ -48,12 +51,12 @@ const nativeBack = !!tg?.initData || (!!tg?.BackButton && tg.isVersionAtLeast?.(
 function go(to) {
   mounted?.destroy(); mounted = null;
   screen = to;
-  const root = $('#screen'), inGame = isGame(to), sub = inGame || to === 'top' || to === 'invites';
+  const root = $('#screen'), inGame = isGame(to), sub = inGame || to === 'top' || to === 'invites' || to === 'shop';
   root.innerHTML = '';
   // inside Telegram the header already has a native back arrow; a second one only crowds the screen
   $('#back').hidden = !sub || nativeBack;
   if (tg?.BackButton) sub ? tg.BackButton.show() : tg.BackButton.hide();
-  document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === (inGame ? 'home' : to === 'top' || to === 'invites' ? 'profile' : to)));
+  document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === (inGame ? 'home' : to === 'top' || to === 'invites' ? 'profile' : to === 'shop' ? 'wallet' : to)));
   document.body.classList.toggle('in-game', inGame); // game screens fit the viewport exactly: no page scroll
   scrollTo(0, 0);
   if (!inGame) {
@@ -80,7 +83,7 @@ function nav(to) {
   const before = `${activeGame?.id}|${S.user?.bonusAt}`;
   loadState().then(() => { if (screen === to && to === 'home' && `${activeGame?.id}|${S.user.bonusAt}` !== before) RENDER.home(); }).catch(() => {});
 }
-const back = () => { haptic('impactOccurred', 'light'); nav(screen === 'top' || screen === 'invites' ? 'profile' : 'home'); };
+const back = () => { haptic('impactOccurred', 'light'); nav(screen === 'top' || screen === 'invites' ? 'profile' : screen === 'shop' ? 'wallet' : 'home'); };
 $('#back').onclick = back;
 tg?.BackButton?.onClick(back);
 addEventListener('active-game', e => isGame(e.detail) && setTimeout(() => loadState().catch(() => {}).finally(() => go(e.detail)), 900));
@@ -163,7 +166,7 @@ const RENDER = {
           <div class="art">${m.icon}</div><div class="txt"><b>${m.name}</b><small>${m.tag}</small></div>
           <span class="go">${I.play}${activeGame?.game === id ? 'Resume' : 'Play now'}</span>
         </button>`).join('')}</div>
-      <p class="foot">Virtual coins only — no real money. Every round is provably fair.</p>`;
+      <p class="foot">Every round is provably fair.</p>`;
     api('/profile').then(p => {
       const L = level(p.xp), el = $('[data-lvl]');
       if (el) { el.innerHTML = `Lv. ${L.lv}<i></i>`; el.style.setProperty('--p', L.pct + '%'); }
@@ -180,7 +183,7 @@ const RENDER = {
           <button type="button" class="btn2" data-act="invite">${I.users}Invite +${inviteReward()}</button>
         </div>
         ${S.user.rescue?.available ? `<button type="button" class="btn-green wide" data-act="rescue">${I.spark}Out of coins? Get +${S.config.rescue}</button>` : ''}
-        <p class="note">Virtual coins only — no deposits or withdrawals.</p></div>
+        <button type="button" class="play buy" data-act="shop">${I.cash}Buy coins</button></div>
       <div class="sec-title">Transactions</div>
       <ul class="list" data-list><li class="empty">Loading…</li></ul>`;
     try {
@@ -255,6 +258,21 @@ const RENDER = {
     } catch (e) { listError(e); }
   },
 
+  // Coin packs. Payments are not connected yet (the payment method is still being decided), so a pack only says so.
+  shop() {
+    $('#screen').innerHTML = `
+      <div class="sec-title" style="margin-top:4px">Buy coins</div>
+      <div class="packs">${PACKS.map((p, i) => `
+        <button type="button" class="pack panel ${p.tag ? 'hot' : ''}" data-pack="${i}">
+          ${p.tag ? `<span class="tag">${p.tag}</span>` : ''}
+          <span class="pack-art">${COIN.repeat(Math.min(3, i + 1))}</span>
+          <b>${fmt(p.coins)}</b><small>coins</small>
+          ${p.bonus ? `<span class="bonus">+${p.bonus}% bonus</span>` : '<span class="bonus muted">&nbsp;</span>'}
+          <span class="price">Soon</span>
+        </button>`).join('')}</div>
+      <p class="note center">Coins are for playing inside Plus Games only. They cannot be withdrawn or exchanged for money.</p>`;
+  },
+
   async top() {
     $('#screen').innerHTML = `<div class="sec-title" style="margin-top:4px">🏆 This week <small class="muted">by virtual profit · resets Saturday</small></div><ol class="list" data-list><li class="empty">Loading…</li></ol>`;
     try {
@@ -271,6 +289,8 @@ $('#screen').addEventListener('click', e => {
   if (isGame(screen)) return; // game modules handle their own clicks
   const card = e.target.closest('[data-go]'), act = e.target.closest('[data-act]'), f = e.target.closest('[data-filter]'), sh = e.target.closest('[data-sheet]');
   if (card) { haptic('impactOccurred', 'light'); return go(card.dataset.go); }
+  const pack = e.target.closest('[data-pack]');
+  if (pack) { haptic('notificationOccurred', 'warning'); return toast('Coin purchases open soon. Payments are not connected yet.'); }
   if (f) { histFilter = f.dataset.filter; haptic('selectionChanged'); return RENDER.history(); }
   if (sh) { openSheet = openSheet === sh.dataset.sheet ? '' : sh.dataset.sheet; return RENDER.profile(); }
   if (!act || act.disabled) return;
@@ -278,6 +298,7 @@ $('#screen').addEventListener('click', e => {
   if (act.dataset.act === 'invite') return invite();
   if (act.dataset.act === 'rescue') { act.disabled = true; return rescue(); }
   if (act.dataset.act === 'invites') return go('invites');
+  if (act.dataset.act === 'shop') { haptic('impactOccurred', 'light'); return go('shop'); }
   if (act.dataset.act === 'top') return go('top');
 });
 
