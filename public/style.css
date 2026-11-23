@@ -758,3 +758,8 @@ body.in-game .pkboard.ps { flex: 1 0 auto; height: auto; min-height: 250px; marg
 .pack .bonus { font-size: 12px; font-weight: 700; color: #4ade80; } .pack .bonus.muted { color: transparent; }
 .pack .price { margin-top: 8px; width: 100%; padding: 8px 0; border-radius: 12px; font-weight: 800; font-size: 13px; color: var(--text2); background: rgba(6,6,22,.6); border: 1px solid #25255e; }
 .note.center { text-align: center; margin-top: 14px; }
+
+/* Stars price on the coin packs */
+.pack .price { display: flex; align-items: center; justify-content: center; gap: 5px; color: #fde68a; border-color: rgba(250,204,21,.45); }
+.pack .price .ic { width: 16px; height: 16px; }
+.pack.busy { opacity: .6; pointer-events: none; }

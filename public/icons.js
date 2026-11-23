@@ -18,6 +18,7 @@ export const I = {
   trophy: icon('<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v3M8 20h8M9 17h6"/>'),
   spark: icon('<path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>'),
   lock: icon('<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>'),
+  star: `<svg class="ic star-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.7.8-5 4.6 1.4 6.6-6-3.4-6 3.4 1.4-6.6-5-4.6 6.7-.8z" fill="#facc15" stroke="#ca8a04" stroke-width="1" stroke-linejoin="round"/></svg>`,
   chevron: icon('<path d="M9 6l6 6-6 6"/>'),
   minus: icon('<path d="M6 12h12"/>', 'stroke-width="2.4"'),
   plus: icon('<path d="M12 6v12M6 12h12"/>', 'stroke-width="2.4"'),
