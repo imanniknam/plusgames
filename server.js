@@ -8,6 +8,7 @@ import * as roulette from './lib/games/roulette.js';
 import * as poop from './lib/games/poop.js';
 import * as penalty from './lib/games/penalty.js';
 import * as hilo from './lib/games/hilo.js';
+import { PACKS, checkPreCheckout, createInvoice, refundPayment, settlePayment, tgApi } from './lib/shop.js';
 
 const ALL = { mines, penalty, hilo, crash, roulette, poop };
 // Release 2-1 offers Mines, Penalty and Higher or Lower. The rest stay in the code, switched off: ENABLED_GAMES lists what is on.
@@ -144,7 +145,7 @@ api.get('/state', async (req, res) => {
       game: view(g) ?? null,
       serverNow: Date.now(),
       config: {
-        bets: BETS, bot: BOT_USERNAME ?? null, dailySteps: DAILY_STEPS.map(c => c / CENTS), rescue: RESCUE / CENTS,
+        bets: BETS, bot: BOT_USERNAME ?? null, shop: PACKS, dailySteps: DAILY_STEPS.map(c => c / CENTS), rescue: RESCUE / CENTS,
         referral: { welcome: REF.welcome / CENTS, signup: REF.signup / CENTS, active: REF.active / CENTS, rounds: REF.rounds, days: REF.days, windowDays: REF.windowDays },
         games: Object.fromEntries(Object.entries(GAMES).map(([id, m]) => [id, m.config])),
       },
@@ -187,6 +188,18 @@ api.post('/rescue', async (req, res) => {
     const balance = await credit(q, req.uid, 'rescue', RESCUE);
     return { balance: balance / CENTS, rescue: rescueState({ balance, last_rescue_at: new Date() }, false) };
   }));
+});
+
+// Coin shop: the client opens this Stars invoice; only the bot webhook credits the coins
+api.post('/shop/invoice', async (req, res) => {
+  res.json(await createInvoice(req.db, req.uid, req.body?.pack, BOT_TOKEN));
+});
+api.get('/shop/purchase/:id', async (req, res) => {
+  if (!/^\d{1,15}$/.test(req.params.id)) throw new HttpError(400, 'Bad purchase id');
+  const { rows: [p] } = await req.db.query(
+    `SELECT p.status, p.coins, u.balance FROM purchases p JOIN users u ON u.id = p.user_id WHERE p.id=$1 AND p.user_id=$2`, [Number(req.params.id), req.uid]);
+  if (!p) throw new HttpError(404, 'Purchase not found');
+  res.json({ status: p.status, coins: p.coins / CENTS, balance: p.balance / CENTS });
 });
 
 // Invites tab: who joined through my link and where each reward stands
@@ -250,7 +263,28 @@ const appLink = game => `${APP_URL}${game ? `${APP_URL.includes('?') ? '&' : '?'
 
 app.post('/bot', async (req, res) => {
   if (!WEBHOOK_SECRET || req.get('x-telegram-bot-api-secret-token') !== WEBHOOK_SECRET) return res.sendStatus(401);
+  // Stars: Telegram waits at most 10 seconds for this answer before it cancels the payment
+  const pre = req.body?.pre_checkout_query;
+  if (pre) {
+    const error = await getDb().then(db => checkPreCheckout(db, pre)).catch(e => { console.error('pre-checkout', e); return 'Please try again in a moment.'; });
+    await tgApi(BOT_TOKEN, 'answerPreCheckoutQuery', { pre_checkout_query_id: pre.id, ok: !error, ...(error && { error_message: error }) });
+    return res.sendStatus(200);
+  }
   const msg = req.body?.message;
+  // money has moved: a database error must answer 500 so Telegram delivers this update again
+  if (msg?.successful_payment) {
+    if (await settlePayment(await getDb(), msg)) await tgSend({ chat_id: msg.chat.id, text: 'Payment received. Your coins are in your wallet.' });
+    return res.sendStatus(200);
+  }
+  if (msg?.refunded_payment) { await refundPayment(await getDb(), msg); return res.sendStatus(200); }
+  if (msg?.text === '/terms') {
+    await tgSend({ chat_id: msg.chat.id, text: 'Coin packs are digital goods paid with Telegram Stars and delivered to your wallet right away. Coins are only for playing inside Plus Games and cannot be withdrawn, sold or exchanged for money. If a purchase is refunded, its coins are removed from your wallet.' });
+    return res.sendStatus(200);
+  }
+  if (msg?.text === '/paysupport') {
+    await tgSend({ chat_id: msg.chat.id, text: process.env.PAY_SUPPORT ? `Payment problem? Contact ${process.env.PAY_SUPPORT} with the receipt from your Telegram payment.` : 'Payment support is not available yet. Please keep the receipt from your Telegram payment.' });
+    return res.sendStatus(200);
+  }
   if (msg?.text?.startsWith('/start') && APP_URL && msg.from) {
     // /start ref_<id>: Telegram is the trusted source of who invited whom (webhook is secret-checked)
     const start = parseStart(msg.text.trim().split(/\s+/)[1]);

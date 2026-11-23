@@ -22,10 +22,7 @@ const ALL_GAMES = {
 const GAMES = {};
 const isGame = k => typeof k === 'string' && Object.hasOwn(GAMES, k);
 const RLABEL = { red: '🔴 Red', black: '⚫ Black', odd: 'Odd', even: 'Even' };
-const KIND = { signup: [I.spark, 'Welcome bonus'], bonus: [I.gift, 'Daily bonus'], referral: [I.users, 'Invite reward'], welcome: [I.users, 'Invited by a friend'], rescue: [I.gift, 'Rescue coins'] };
-
-// coin packs shown in the shop (amount + bonus); prices come once a payment method is chosen
-const PACKS = [{ coins: 1000 }, { coins: 5500, bonus: 10 }, { coins: 12000, bonus: 20, tag: 'Popular' }, { coins: 32500, bonus: 30, tag: 'Best value' }];
+const KIND = { signup: [I.spark, 'Welcome bonus'], bonus: [I.gift, 'Daily bonus'], referral: [I.users, 'Invite reward'], welcome: [I.users, 'Invited by a friend'], rescue: [I.gift, 'Rescue coins'], purchase: [I.star, 'Coins purchased'], refund: [I.star, 'Purchase refunded'] };
 
 let screen = null, mounted = null, activeGame = null, histFilter = '', openSheet = '';
 
@@ -116,6 +113,31 @@ async function rescue() {
     haptic('notificationOccurred', 'success'); toast(`+${S.config.rescue} coins to get you playing again`);
   } catch (e) { toast(e.message); await loadState().catch(() => {}); }
   RENDER[screen]?.();
+}
+let buying = false;
+async function buyPack(el) {
+  if (buying) return;
+  if (!tg?.initData || !tg.isVersionAtLeast?.('6.1')) return toast('Open Plus Games in Telegram to buy coins');
+  buying = true; el.classList.add('busy'); haptic('impactOccurred', 'medium');
+  try {
+    const { id, link } = await api('/shop/invoice', { pack: el.dataset.pack });
+    tg.openInvoice(link, async status => {
+      buying = false; el.classList.remove('busy');
+      if (status === 'failed') return toast('Payment failed. You were not charged.');
+      if (status !== 'paid') return;
+      toast('Payment received. Adding your coins…');
+      // the webhook credits the coins; give it a moment, then fall back to the wallet refresh
+      for (let i = 0; i < 12; i++) {
+        const p = await api(`/shop/purchase/${id}`).catch(() => null);
+        if (p?.status === 'paid') {
+          setBalance(p.balance); haptic('notificationOccurred', 'success');
+          return toast(`+${fmt(p.coins)} coins added`);
+        }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      toast('Your coins will appear in a moment');
+    });
+  } catch (e) { buying = false; el.classList.remove('busy'); toast(e.message); }
 }
 function invite() {
   if (!S.config.bot) return toast('Invites are not available yet');
@@ -258,17 +280,17 @@ const RENDER = {
     } catch (e) { listError(e); }
   },
 
-  // Coin packs. Payments are not connected yet (the payment method is still being decided), so a pack only says so.
+  // Coin packs paid with Telegram Stars
   shop() {
     $('#screen').innerHTML = `
       <div class="sec-title" style="margin-top:4px">Buy coins</div>
-      <div class="packs">${PACKS.map((p, i) => `
-        <button type="button" class="pack panel ${p.tag ? 'hot' : ''}" data-pack="${i}">
+      <div class="packs">${S.config.shop.map((p, i) => `
+        <button type="button" class="pack panel ${p.tag ? 'hot' : ''}" data-pack="${p.id}" aria-label="Buy ${fmt(p.coins)} coins for ${p.stars} Stars">
           ${p.tag ? `<span class="tag">${p.tag}</span>` : ''}
           <span class="pack-art">${COIN.repeat(Math.min(3, i + 1))}</span>
           <b>${fmt(p.coins)}</b><small>coins</small>
           ${p.bonus ? `<span class="bonus">+${p.bonus}% bonus</span>` : '<span class="bonus muted">&nbsp;</span>'}
-          <span class="price">Soon</span>
+          <span class="price">${I.star}${fmt(p.stars)}</span>
         </button>`).join('')}</div>
       <p class="note center">Coins are for playing inside Plus Games only. They cannot be withdrawn or exchanged for money.</p>`;
   },
@@ -290,7 +312,7 @@ $('#screen').addEventListener('click', e => {
   const card = e.target.closest('[data-go]'), act = e.target.closest('[data-act]'), f = e.target.closest('[data-filter]'), sh = e.target.closest('[data-sheet]');
   if (card) { haptic('impactOccurred', 'light'); return go(card.dataset.go); }
   const pack = e.target.closest('[data-pack]');
-  if (pack) { haptic('notificationOccurred', 'warning'); return toast('Coin purchases open soon. Payments are not connected yet.'); }
+  if (pack) return buyPack(pack);
   if (f) { histFilter = f.dataset.filter; haptic('selectionChanged'); return RENDER.history(); }
   if (sh) { openSheet = openSheet === sh.dataset.sheet ? '' : sh.dataset.sheet; return RENDER.profile(); }
   if (!act || act.disabled) return;
