@@ -93,7 +93,7 @@ test('mines: bet can change before the first tile (difference charged/refunded),
   const r = await c('POST', '/mines/reveal', { cell: 0 });
   if (r.game.status === 'active') {
     assert.equal((await c('POST', '/mines/bet', { bet: 10 })).status, 409); // board is in play: bet is fixed
-    assert.equal((await c('POST', '/mines/cashout')).game.payout, 61); // 50 × 1.22x
+    assert.equal((await c('POST', '/mines/cashout')).game.payout, 59); // 50 × 1.18x
   } else assert.equal(r.game.bet, 50);
   const w = await c('GET', '/wallet');
   assert.deepEqual(w.items.filter(i => i.kind === 'bet' && i.game === 'mines').map(i => i.amount).reverse(), [-10, -90, 50]);
@@ -113,7 +113,7 @@ test('mines: no leak while active, parallel cash-outs pay once, seed reproduces 
   const rs = await Promise.all(Array.from({ length: 6 }, () => c('POST', '/mines/cashout')));
   const ok = rs.filter(r => r.status === 200);
   assert.equal(ok.length, 1);
-  assert.equal(ok[0].balance, before + 122);
+  assert.equal(ok[0].balance, before + 118);
   assert.deepEqual(mines.minesFromSeed(ok[0].game.seed), ok[0].game.mines);
   assert.equal(createHash('sha256').update(ok[0].game.seed).digest('hex'), ok[0].game.seedHash);
 });
@@ -202,7 +202,7 @@ test('crash: round ends on the server even if the client disappears (auto cash-o
 const dbq = async (sql, p) => (await (await import('../lib/db.js')).getDb()).query(sql, p);
 const activeRow = async uid => (await dbq(`SELECT * FROM games WHERE user_id=$1 AND status='active'`, [uid])).rows[0];
 
-test('mines: clearing all 7 safe tiles auto-pays 34.20x; revealing a used tile is idempotent', async () => {
+test('mines: clearing all 7 safe tiles auto-pays 20.08x; revealing a used tile is idempotent', async () => {
   const c = client();
   await c('POST', '/mines/bet', { bet: 100 });
   const { mines: bombs } = await activeRow(c.uid);
@@ -217,8 +217,8 @@ test('mines: clearing all 7 safe tiles auto-pays 34.20x; revealing a used tile i
     }
   }
   assert.equal(r.game.status, 'cashed');
-  assert.equal(r.game.multiplier, 34.2);
-  assert.equal(r.balance, 900 + 3420);
+  assert.equal(r.game.multiplier, 20.08);
+  assert.equal(r.balance, 900 + 2008);
   assert.equal((await c('POST', '/mines/cashout')).status, 409);
 });
 

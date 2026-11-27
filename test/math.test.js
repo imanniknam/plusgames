@@ -6,13 +6,13 @@ import * as poop from '../lib/games/poop.js';
 import * as roulette from '../lib/games/roulette.js';
 import * as crash from '../lib/games/crash.js';
 
-test('mines: ladder = 0.95 / P(survive), RTP <= 95% at every step', () => {
-  assert.deepEqual(mines.LADDER, [122, 162, 228, 342, 570, 1140, 3420]);
+test('mines: ladder = 0.92^k / P(survive): the house share grows 8% with every safe tile', () => {
+  assert.deepEqual(mines.LADDER, [118, 145, 186, 257, 395, 727, 2008]);
   let p = 1;
   for (let k = 1; k <= 7; k++) {
     p *= (7 - (k - 1)) / (9 - (k - 1));
     const ev = p * mines.multiplierX100(k) / 100;
-    assert.ok(ev <= 0.95 + 1e-12 && ev > 0.94, `k=${k} ev=${ev}`);
+    assert.ok(ev <= 0.92 ** k + 1e-12 && ev > 0.92 ** k - 0.01, `k=${k} ev=${ev}`);
   }
 });
 
