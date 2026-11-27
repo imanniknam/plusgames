@@ -118,7 +118,8 @@ export default function mount(root, { initial, refresh, resync }) {
     fx.gsap.to($$('.tile.is-gem'), { scale: 1.12, duration: 0.18, yoyo: true, repeat: 1, stagger: 0.05, ease: 'power2.out' });
     unveil('center', 0.25);
     pop($('.mx-now'), 0.4);
-    if (g.multiplier >= 5.7) { fx.confetti(g.multiplier >= 34.2 ? 110 : 60); fx.banner(t(g.multiplier >= 34.2 ? 'MAX WIN!' : 'BIG WIN!'), `${x2(g.multiplier)} · +${fmt(g.net)}`); }
+    const top = cfg.ladder.at(-1);
+    if (g.multiplier >= cfg.ladder[4]) { fx.confetti(g.multiplier >= top ? 110 : 60); fx.banner(t(g.multiplier >= top ? 'MAX WIN!' : 'BIG WIN!'), `${x2(g.multiplier)} · +${fmt(g.net)}`); }
   }
 
   // wins count the balance up as the coins land

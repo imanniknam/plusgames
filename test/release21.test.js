@@ -43,11 +43,11 @@ const client = (uid = --uidSeq, start) => {
 const balance = async c => (await c('GET', '/state')).user.balance;
 
 // ---------- math ----------
-test('penalty: ladder = floor(0.95 × 1.25^n), RTP <= 95% at every step', () => {
-  assert.deepEqual(penalty.LADDER, [118, 148, 185, 231, 289]);
+test('penalty: ladder = floor((0.92 × 1.25)^n): the house share grows 8% with every goal', () => {
+  assert.deepEqual(penalty.LADDER, [115, 132, 152, 174, 201]);
   penalty.LADDER.forEach((m, i) => {
     const ev = 0.8 ** (i + 1) * m / 100;
-    assert.ok(ev <= 0.95 + 1e-12 && ev > 0.94, `n=${i + 1} ev=${ev}`);
+    assert.ok(ev <= 0.92 ** (i + 1) + 1e-12 && ev > 0.92 ** (i + 1) - 0.01, `n=${i + 1} ev=${ev}`);
   });
 });
 
@@ -59,22 +59,25 @@ test('penalty: keeper dives are uniform over 5 corners and reproducible', () => 
   assert.deepEqual(penalty.keepersFromSeed(seed), penalty.keepersFromSeed(seed));
 });
 
-test('hilo: options never pay under 1x, and every pick returns 95%', () => {
+test('hilo: a right guess always adds to the multiplier, and every pick returns at most 93%', () => {
   for (let r = 2; r <= 14; r++) {
     const o = hilo.options(r);
     for (const p of [o.hi, o.lo]) {
       const wins = [...Array(13).keys()].map(k => k + 2).filter(p.wins).length;
       assert.equal(wins, p.count, `rank ${r} ${p.label}`);
       const m = hilo.nextX100(100, p.count);
-      assert.ok(m >= 100, `rank ${r} ${p.label} pays ${m}`);
+      assert.ok(m > 100, `rank ${r} ${p.label} pays ${m}`);
       const ev = (p.count / 13) * m / 100;
-      assert.ok(ev <= 0.95 + 1e-12 && ev > 0.93, `rank ${r} ${p.label} ev=${ev}`);
+      assert.ok(ev <= 0.933 && ev > 0.91, `rank ${r} ${p.label} ev=${ev}`);
     }
   }
-  assert.equal(hilo.nextX100(100, 8), 154); // a 7 showing, "higher or same": 0.95 × 13/8
+  assert.equal(hilo.nextX100(100, 8), 149); // a 7 showing, "higher or same": 0.92 × 13/8
+  assert.equal(hilo.nextX100(100, 12), 101); // 0.92 × 13/12 is under 1x: a right guess still adds 0.01x
+  let c = 100; for (let i = 0; i < 5; i++) c = hilo.nextX100(c, 7);
+  assert.ok(0.538 ** 5 * c / 100 < 0.92 ** 5 + 0.01, 'the share compounds on every guess');
 });
 
-test('hilo: simulated 100k rounds of one guess each return about 95%', () => {
+test('hilo: simulated 100k rounds of one guess each return about 92%', () => {
   let bet = 0, back = 0;
   for (let i = 0; i < 100000; i++) {
     const { seed } = newSeed(), cur = hilo.card(seed, 0), next = hilo.card(seed, 1), o = hilo.options(cur.rank);
@@ -82,13 +85,13 @@ test('hilo: simulated 100k rounds of one guess each return about 95%', () => {
     bet += 1;
     if (p.wins(next.rank)) back += hilo.nextX100(100, p.count) / 100;
   }
-  assert.ok(back / bet > 0.93 && back / bet < 0.97, `rtp=${back / bet}`);
+  assert.ok(back / bet > 0.9 && back / bet < 0.94, `rtp=${back / bet}`);
 });
 
-test('penalty: simulated 100k one-shot rounds return about 95%', () => {
+test('penalty: simulated 100k one-shot rounds return about 92%', () => {
   let back = 0;
   for (let i = 0; i < 100000; i++) if (penalty.keeper(newSeed().seed, 0) !== i % 5) back += penalty.LADDER[0] / 100;
-  assert.ok(back / 100000 > 0.93 && back / 100000 < 0.96, `rtp=${back / 100000}`);
+  assert.ok(back / 100000 > 0.9 && back / 100000 < 0.935, `rtp=${back / 100000}`);
 });
 
 test('start payload: ref_ and src_ parsed, anything else ignored', () => {
@@ -115,7 +118,7 @@ test('penalty: keepers hidden while live, retried shot is a no-op, cash out once
     const { rows: [row] } = await dbq(`SELECT seed FROM games WHERE id=$1`, [g.id]);
     const zone = (penalty.keeper(row.seed, 0) + 1) % 5;
     g = (await c('POST', '/penalty/shoot', { zone, shot: 0 })).game;
-    assert.equal(g.status, 'active'); assert.equal(g.goals, 1); assert.equal(g.cashout, 118);
+    assert.equal(g.status, 'active'); assert.equal(g.goals, 1); assert.equal(g.cashout, 115);
     const again = (await c('POST', '/penalty/shoot', { zone, shot: 0 })).game; // retry of the same shot
     assert.equal(again.shots.length, 1);
     break;
@@ -124,12 +127,12 @@ test('penalty: keepers hidden while live, retried shot is a no-op, cash out once
   const rs = await Promise.all(Array.from({ length: 5 }, () => c('POST', '/penalty/cashout')));
   const ok = rs.filter(r => r.status === 200);
   assert.equal(ok.length, 1);
-  assert.equal(ok[0].balance, before + 118);
+  assert.equal(ok[0].balance, before + 115);
   assert.deepEqual(ok[0].game.keepers, penalty.keepersFromSeed(ok[0].game.seed));
   assert.equal(createHash('sha256').update(ok[0].game.seed).digest('hex'), ok[0].game.seedHash);
 });
 
-test('penalty: shooting at the keeper loses; five goals auto-pay 2.89x', async () => {
+test('penalty: shooting at the keeper loses; five goals auto-pay 2.01x', async () => {
   const c = client();
   let g = (await c('POST', '/penalty/bet', { bet: 10 })).game;
   let { rows: [row] } = await dbq(`SELECT seed FROM games WHERE id=$1`, [g.id]);
@@ -138,8 +141,8 @@ test('penalty: shooting at the keeper loses; five goals auto-pay 2.89x', async (
   g = (await c('POST', '/penalty/bet', { bet: 10 })).game;
   ({ rows: [row] } = await dbq(`SELECT seed FROM games WHERE id=$1`, [g.id]));
   for (let i = 0; i < 5; i++) g = (await c('POST', '/penalty/shoot', { zone: (penalty.keeper(row.seed, i) + 2) % 5, shot: i })).game;
-  assert.equal(g.status, 'cashed'); assert.equal(g.multiplier, 2.89); assert.equal(g.payout, 28.9);
-  assert.equal(await balance(c), 1000 - 10 - 10 + 28.9);
+  assert.equal(g.status, 'cashed'); assert.equal(g.multiplier, 2.01); assert.equal(g.payout, 20.1);
+  assert.equal(await balance(c), 1000 - 10 - 10 + 20.1);
 });
 
 test('penalty: a round abandoned for a day settles itself (refund if no goal)', async () => {

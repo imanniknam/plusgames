@@ -6,9 +6,9 @@ import { LANG, LANGS, guessLang, setLang, t } from './i18n.js';
 
 // names and texts are English keys; t() shows them in the player's language
 const ALL_GAMES = {
-  mines: { mount: mines, icon: GEM, name: 'Mines', title: 'Mines', sub: 'Find safe tiles. Avoid the mines.', tag: 'Risk & Strategy', max: '34.20x',
+  mines: { mount: mines, icon: GEM, name: 'Mines', title: 'Mines', sub: 'Find safe tiles. Avoid the mines.', tag: 'Risk & Strategy', max: '20.08x',
     help: 'Mines — 3×3 board, 2 bombs. Each safe tile raises the multiplier; cash out any time.' },
-  penalty: { load: () => import('./games/penalty.js'), icon: '⚽', name: 'Penalty', title: 'Penalty', sub: 'Pick a corner. Beat the keeper.', tag: 'Football', max: '2.89x',
+  penalty: { load: () => import('./games/penalty.js'), icon: '⚽', name: 'Penalty', title: 'Penalty', sub: 'Pick a corner. Beat the keeper.', tag: 'Football', max: '2.01x',
     help: 'Penalty — up to 5 shots; the keeper saves 1 corner in 5. Each goal raises the multiplier; cash out any time.' },
   hilo: { load: () => import('./games/hilo.js'), icon: '🃏', name: 'Higher or Lower', title: 'Higher or Lower', sub: 'Will the next card be higher or lower?', tag: 'Cards', max: '10k coins',
     help: 'Higher or Lower — guess the next card; a same rank wins both ways. Each right guess multiplies; cash out any time.' },
