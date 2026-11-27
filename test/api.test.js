@@ -322,7 +322,7 @@ test('wallet ledger and profile stats reflect real rounds', async () => {
   assert.equal(w.items[0].balance, spin.balance);
   assert.ok(w.items.some(i => i.kind === 'bet' && i.amount === -50 && i.game === 'roulette'));
   const p = await c('GET', '/profile');
-  assert.deepEqual([p.rounds, p.xp, p.wins], [1, 50, spin.game.won ? 1 : 0]);
+  assert.deepEqual([p.rounds, p.xp, p.level, p.wins], [1, 10, 1, spin.game.won ? 1 : 0]); // 5 XP + 1 per 10 coins bet
   assert.equal(p.net, spin.game.net);
 });
 

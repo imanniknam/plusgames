@@ -284,3 +284,26 @@ test('ledger invariant after all of the above: balance == sum(ledger), never neg
   assert.ok(rows.length > 5);
   for (const u of rows) assert.equal(Number(u.balance), Number(u.total), `user ${u.id}`);
 });
+
+// ---------- levels ----------
+test('levels: XP per round (not per coin), no XP for refunds, 600 XP a day at most', async () => {
+  const { levelOf, levelFloor } = await import('../server.js');
+  assert.deepEqual([levelFloor(1), levelFloor(2), levelFloor(5), levelFloor(10)], [0, 200, 3200, 16200]);
+  assert.deepEqual(levelOf(199), { level: 1, xp: 199, from: 0, to: 200 });
+  assert.equal(levelOf(3200).level, 5);
+  const c = client();
+  await c('POST', '/penalty/bet', { bet: 100 });
+  await c('POST', '/penalty/shoot', { zone: 0, shot: 0 });
+  if ((await c('GET', '/state')).game) await c('POST', '/penalty/cashout');
+  let p = await c('GET', '/profile');
+  assert.deepEqual([p.xp, p.level], [15, 1]); // 5 + 100/10
+  // a refunded (abandoned, untouched) round gives nothing
+  const g = (await c('POST', '/penalty/bet', { bet: 10 })).game;
+  await dbq(`UPDATE games SET created_at = now() - interval '25 hours' WHERE id=$1`, [g.id]);
+  await c('GET', '/state');
+  assert.equal((await c('GET', '/profile')).xp, 15);
+  // a heavy day is capped: pretend 80 rounds of 100 coins finished today
+  for (let i = 0; i < 80; i++) await dbq(`INSERT INTO games (user_id, game, bet, status, seed, seed_hash, ended_at) VALUES ($1,'penalty',10000,'busted','s','h',now())`, [c.uid]);
+  p = await c('GET', '/profile');
+  assert.equal(p.xp, 600); assert.equal(p.level, 2);
+});

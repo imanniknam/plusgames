@@ -136,11 +136,11 @@ api.get('/state', async (req, res) => {
   res.json(await req.db.tx(async q => {
     const g = await getActive(q, req.uid); // also settles a crash round that ended while the app was closed
     const { rows: [u] } = await q(
-      `SELECT id, first_name, balance, last_bonus_at, bonus_streak, last_rescue_at,
+      `SELECT id, first_name, balance, last_bonus_at, bonus_streak, last_rescue_at, lang,
          (SELECT COUNT(*) FROM users r WHERE r.referred_by = u.id) AS invited
        FROM users u WHERE id=$1`, [req.uid]);
     return {
-      user: { id: u.id, name: u.first_name, balance: u.balance / CENTS, invited: Number(u.invited), ...bonusState(u),
+      user: { id: u.id, name: u.first_name, balance: u.balance / CENTS, invited: Number(u.invited), lang: u.lang ?? null, ...bonusState(u),
         rescue: rescueState(u, !!g) },
       game: view(g) ?? null,
       serverNow: Date.now(),
@@ -154,6 +154,15 @@ api.get('/state', async (req, res) => {
 });
 
 for (const m of Object.values(GAMES)) m.routes(api);
+
+// The player's language, shared by the app and the bot
+export const LANGS = ['en', 'fa'];
+api.post('/lang', async (req, res) => {
+  const lang = req.body?.lang;
+  if (!LANGS.includes(lang)) throw new HttpError(400, 'Unknown language');
+  await req.db.query('UPDATE users SET lang=$2 WHERE id=$1', [req.uid, lang]);
+  res.json({ lang });
+});
 
 // streak: the day the next claim would be (1..7), its amount, and when it can be claimed
 function bonusState(u, now = Date.now()) {
@@ -228,14 +237,33 @@ api.get('/wallet', async (req, res) => {
   res.json({ items: rows.map(r => ({ id: r.id, kind: r.kind, game: r.game, amount: r.amount / CENTS, balance: r.balance_after / CENTS, at: r.created_at })) });
 });
 
-// Profile tab: stats derived from real rounds (XP = coins wagered)
+// Levels. XP comes from finished rounds, not from coins wagered, so buying coins or betting big does not
+// level anyone up: a round gives 5 XP plus 1 per 10 coins bet (6..15), refunded rounds give none, and a day
+// counts at most 600 XP (~50 rounds). Level n starts at 200·(n−1)² XP: level 2 after ~20 rounds,
+// level 5 after ~300, level 10 after ~1,600 rounds of steady play.
+export const XP_PER_DAY = 600;
+export const levelFloor = n => 200 * (n - 1) ** 2;
+export function levelOf(xp) {
+  const n = Math.floor(Math.sqrt(xp / 200)) + 1;
+  return { level: n, xp, from: levelFloor(n), to: levelFloor(n + 1) };
+}
+async function xpOf(q, uid) {
+  const { rows: [r] } = await q(
+    `SELECT COALESCE(SUM(LEAST(day_xp, $2)), 0)::int AS xp FROM (
+       SELECT SUM(5 + LEAST(bet, 10000) / 1000) AS day_xp FROM games
+       WHERE user_id=$1 AND status <> 'active' AND NOT (status='cashed' AND mult_x100=100)
+       GROUP BY (ended_at AT TIME ZONE 'Asia/Tehran')::date) d`, [uid, XP_PER_DAY]);
+  return Number(r.xp);
+}
+
+// Profile tab: stats derived from real rounds
 api.get('/profile', async (req, res) => {
   const { rows: [s] } = await req.db.query(
     `SELECT COUNT(*) AS rounds, COUNT(*) FILTER (WHERE status='cashed') AS wins,
        COALESCE(SUM(payout - bet), 0) AS net, COALESCE(SUM(bet), 0) AS wagered,
        COALESCE(MAX(mult_x100) FILTER (WHERE status='cashed'), 0) AS best
      FROM games WHERE user_id=$1 AND status <> 'active' AND game = ANY($2)`, [req.uid, ENABLED]);
-  res.json({ rounds: Number(s.rounds), wins: Number(s.wins), net: Number(s.net) / CENTS, xp: Number(s.wagered) / CENTS, best: Number(s.best) / 100 });
+  res.json({ rounds: Number(s.rounds), wins: Number(s.wins), net: Number(s.net) / CENTS, best: Number(s.best) / 100, ...levelOf(await xpOf(req.db.query, req.uid)) });
 });
 
 // This week's profit (weeks start Saturday 00:00 Tehran time); ties go to whoever got there first.
@@ -258,8 +286,53 @@ const tgSend = body => fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessa
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(4000),
 }).catch(e => console.error('sendMessage failed', e));
 
-const BOT_BUTTONS = { mines: '💣 Mines', penalty: '⚽ Penalty', hilo: '🃏 Higher or Lower', crash: '🚀 Crash', roulette: '🎡 Roulette', poop: '💩 Poop' };
+const BOT_BUTTONS = {
+  en: { mines: '💣 Mines', penalty: '⚽ Penalty', hilo: '🃏 Higher or Lower', crash: '🚀 Crash', roulette: '🎡 Roulette', poop: '💩 Poop' },
+  fa: { mines: '💣 ماینز', penalty: '⚽ پنالتی', hilo: '🃏 بالاتر یا پایین‌تر', crash: '🚀 کرش', roulette: '🎡 رولت', poop: '💩 پوپ' },
+};
 const appLink = game => `${APP_URL}${game ? `${APP_URL.includes('?') ? '&' : '?'}game=${game}` : ''}`;
+
+// Bot texts. The language picker is a reply keyboard (plain text messages), so no callback_query updates are needed.
+const PICK = { 'فارسی': 'fa', 'English': 'en' };
+const ASK_LANG = 'Choose your language\nزبان خود را انتخاب کنید';
+const BOT_TEXT = {
+  en: {
+    saved: 'Language set to English. You can change it any time with /language.',
+    welcome: n => `🎮 Plus Games — ${n} quick games, one wallet.\n\nYou start with 1,000 free coins. Pick a game:`,
+    welcomeMines: '💣 Mines — open safe tiles, dodge the bombs, cash out any time.\n\nYou start with 1,000 free coins.',
+    lobby: '🏠 Open lobby',
+    paid: 'Payment received. Your coins are in your wallet.',
+    terms: 'Coin packs are digital goods paid with Telegram Stars and delivered to your wallet right away. Coins are only for playing inside Plus Games and cannot be withdrawn, sold or exchanged for money. If a purchase is refunded, its coins are removed from your wallet.',
+    support: c => `Payment problem? Contact ${c} with the receipt from your Telegram payment.`,
+    noSupport: 'Payment support is not available yet. Please keep the receipt from your Telegram payment.',
+  },
+  fa: {
+    saved: 'زبان روی فارسی تنظیم شد. هر وقت خواستید با /language عوضش کنید.',
+    welcome: n => `🎮 پلاس گیمز — ${n.toLocaleString('fa-IR')} بازی سریع، یک کیف پول.\n\nبا ۱٬۰۰۰ سکه‌ی رایگان شروع می‌کنید. یک بازی انتخاب کنید:`,
+    welcomeMines: '💣 ماینز — خانه‌های امن را باز کنید، از بمب‌ها دوری کنید و هر وقت خواستید برداشت کنید.\n\nبا ۱٬۰۰۰ سکه‌ی رایگان شروع می‌کنید.',
+    lobby: '🏠 ورود به لابی',
+    paid: 'پرداخت انجام شد. سکه‌ها در کیف پول شما هستند.',
+    terms: 'بسته‌های سکه کالای دیجیتال هستند که با Telegram Stars پرداخت می‌شوند و بلافاصله به کیف پول شما اضافه می‌شوند. سکه‌ها فقط برای بازی در پلاس گیمز هستند و قابل برداشت، فروش یا تبدیل به پول نیستند. اگر خریدی بازپرداخت شود، سکه‌های آن از کیف پول شما کم می‌شود.',
+    support: c => `مشکل پرداخت دارید؟ با رسید پرداخت تلگرام به ${c} پیام دهید.`,
+    noSupport: 'پشتیبانی پرداخت هنوز فعال نیست. لطفاً رسید پرداخت تلگرام را نگه دارید.',
+  },
+};
+const langOf = async uid => {
+  const { rows: [u] } = await (await getDb()).query('SELECT lang FROM users WHERE id=$1', [uid]);
+  return u?.lang ?? null;
+};
+const askLang = chat_id => tgSend({ chat_id, text: ASK_LANG, reply_markup: { keyboard: [[{ text: 'فارسی' }, { text: 'English' }]], resize_keyboard: true, one_time_keyboard: true } });
+function sendWelcome(chat_id, lang) {
+  const T = BOT_TEXT[lang], buttons = ENABLED.map(id => ({ text: BOT_BUTTONS[lang][id], web_app: { url: appLink(id) } }));
+  return tgSend({
+    chat_id,
+    text: ENABLED.join() === 'mines' ? T.welcomeMines : T.welcome(ENABLED.length),
+    reply_markup: { inline_keyboard: [
+      ...Array.from({ length: Math.ceil(buttons.length / 2) }, (_, i) => buttons.slice(i * 2, i * 2 + 2)),
+      ...(ENABLED.length > 1 ? [[{ text: T.lobby, web_app: { url: appLink() } }]] : []),
+    ] },
+  });
+}
 
 app.post('/bot', async (req, res) => {
   if (!WEBHOOK_SECRET || req.get('x-telegram-bot-api-secret-token') !== WEBHOOK_SECRET) return res.sendStatus(401);
@@ -273,34 +346,33 @@ app.post('/bot', async (req, res) => {
   const msg = req.body?.message;
   // money has moved: a database error must answer 500 so Telegram delivers this update again
   if (msg?.successful_payment) {
-    if (await settlePayment(await getDb(), msg)) await tgSend({ chat_id: msg.chat.id, text: 'Payment received. Your coins are in your wallet.' });
+    if (await settlePayment(await getDb(), msg)) await tgSend({ chat_id: msg.chat.id, text: BOT_TEXT[await langOf(msg.from.id).catch(() => null) ?? 'en'].paid });
     return res.sendStatus(200);
   }
   if (msg?.refunded_payment) { await refundPayment(await getDb(), msg); return res.sendStatus(200); }
-  if (msg?.text === '/terms') {
-    await tgSend({ chat_id: msg.chat.id, text: 'Coin packs are digital goods paid with Telegram Stars and delivered to your wallet right away. Coins are only for playing inside Plus Games and cannot be withdrawn, sold or exchanged for money. If a purchase is refunded, its coins are removed from your wallet.' });
-    return res.sendStatus(200);
-  }
-  if (msg?.text === '/paysupport') {
-    await tgSend({ chat_id: msg.chat.id, text: process.env.PAY_SUPPORT ? `Payment problem? Contact ${process.env.PAY_SUPPORT} with the receipt from your Telegram payment.` : 'Payment support is not available yet. Please keep the receipt from your Telegram payment.' });
-    return res.sendStatus(200);
-  }
-  if (msg?.text?.startsWith('/start') && APP_URL && msg.from) {
-    // /start ref_<id>: Telegram is the trusted source of who invited whom (webhook is secret-checked)
-    const start = parseStart(msg.text.trim().split(/\s+/)[1]);
-    if (start.source) await getDb().then(db => db.tx(q => ensureUser(q, msg.from, start))).catch(e => console.error('start', e));
-    const buttons = ENABLED.map(id => ({ text: BOT_BUTTONS[id], web_app: { url: appLink(id) } }));
-    await tgSend({
-      chat_id: msg.chat.id,
-      text: ENABLED.join() === 'mines'
-        ? `💣 Mines — open safe tiles, dodge the bombs, cash out any time.\n\nYou start with 1,000 free coins.`
-        : `🎮 Plus Games — ${ENABLED.length} quick games, one wallet.\n\nYou start with 1,000 free coins. Pick a game:`,
-      reply_markup: { inline_keyboard: [
-        ...Array.from({ length: Math.ceil(buttons.length / 2) }, (_, i) => buttons.slice(i * 2, i * 2 + 2)),
-        ...(ENABLED.length > 1 ? [[{ text: '🏠 Open lobby', web_app: { url: appLink() } }]] : []),
-      ] },
-    });
-  }
+  if (!msg?.text || !msg.from) return res.sendStatus(200);
+  const chat_id = msg.chat.id, cmd = msg.text.trim().split(/[\s@]/)[0];
+  try {
+    if (cmd === '/terms' || cmd === '/paysupport') {
+      const T = BOT_TEXT[await langOf(msg.from.id) ?? 'en'];
+      await tgSend({ chat_id, text: cmd === '/terms' ? T.terms : process.env.PAY_SUPPORT ? T.support(process.env.PAY_SUPPORT) : T.noSupport });
+    } else if (cmd === '/language') {
+      await askLang(chat_id);
+    } else if (Object.hasOwn(PICK, msg.text.trim()) && APP_URL) {
+      const lang = PICK[msg.text.trim()];
+      const db = await getDb();
+      await db.tx(q => ensureUser(q, msg.from));
+      await db.query('UPDATE users SET lang=$2 WHERE id=$1', [msg.from.id, lang]);
+      await tgSend({ chat_id, text: BOT_TEXT[lang].saved, reply_markup: { remove_keyboard: true } });
+      await sendWelcome(chat_id, lang);
+    } else if (cmd === '/start' && APP_URL) {
+      // /start ref_<id>: Telegram is the trusted source of who invited whom (webhook is secret-checked)
+      const start = parseStart(msg.text.trim().split(/\s+/)[1]);
+      await getDb().then(db => db.tx(q => ensureUser(q, msg.from, start)));
+      const lang = await langOf(msg.from.id);
+      await (lang ? sendWelcome(chat_id, lang) : askLang(chat_id));
+    }
+  } catch (e) { console.error('bot', e); }
   res.sendStatus(200);
 });
 

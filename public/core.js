@@ -1,6 +1,7 @@
 // Shared client plumbing. The client never decides outcomes or balances; it renders server answers.
 import * as fx from './fx.js';
 import { I } from './icons.js';
+import { LANG, t } from './i18n.js';
 export const tg = window.Telegram?.WebApp;
 export const $ = (sel, root = document) => root.querySelector(sel);
 // Signed launch data. Normally from the SDK; if the SDK failed to load, Telegram still passes it in the URL hash.
@@ -34,8 +35,8 @@ export async function api(path, body) {
 
 let toastT;
 export function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.hidden = false;
-  clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2600);
+  const el = $('#toast'); el.textContent = t(msg); el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), 2600);
 }
 
 // The balance ticks to its new value; `delay` lets a win count up as the flying coins land.
@@ -125,15 +126,15 @@ const VERIFY = {
 export async function verify(g) {
   const hashOk = (await sha256(g.seed)) === g.seedHash;
   const [ok, what] = await VERIFY[g.game](g);
-  return hashOk && ok ? `✅ Verified: seed matches its hash, ${what}` : '❌ Mismatch!';
+  return hashOk && ok ? t('✅ Verified: seed matches its hash, {what}', { what }) : t('❌ Mismatch!');
 }
 
 export function fairBox(g) {
   const over = g && g.status !== 'active';
-  return `<details class="fair panel"><summary>🔒 Provably fair</summary>
-    <p>The outcome is fixed by a secret seed before you play. You see its SHA-256 now; the seed is revealed after the round so you can check nothing changed.</p>
-    <p class="mono">Hash: ${g?.seedHash ?? '—'}</p>
-    ${over ? `<p class="mono">Seed: ${g.seed}</p><button type="button" class="ghost" data-verify>Verify last round</button><p data-verify-out></p>` : ''}
+  return `<details class="fair panel"><summary>🔒 ${t('Provably fair')}</summary>
+    <p>${t('The outcome is fixed by a secret seed before you play. You see its SHA-256 now; the seed is revealed after the round so you can check nothing changed.')}</p>
+    <p class="mono" dir="ltr">Hash: ${g?.seedHash ?? '—'}</p>
+    ${over ? `<p class="mono" dir="ltr">Seed: ${g.seed}</p><button type="button" class="ghost" data-verify>${t('Verify last round')}</button><p data-verify-out></p>` : ''}
   </details>`;
 }
 export function bindFair(root, getGame) {
@@ -143,7 +144,8 @@ export function bindFair(root, getGame) {
   });
 }
 
-export const ago = t => {
-  const s = (Date.now() - new Date(t)) / 1000;
-  return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : new Date(t).toLocaleDateString();
+export const ago = at => {
+  const s = (Date.now() - new Date(at)) / 1000;
+  return s < 60 ? t('just now') : s < 3600 ? t('{n}m ago', { n: Math.floor(s / 60) }) : s < 86400 ? t('{n}h ago', { n: Math.floor(s / 3600) })
+    : new Date(at).toLocaleDateString(LANG === 'fa' ? 'fa-IR' : undefined);
 };

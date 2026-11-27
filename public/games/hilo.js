@@ -1,6 +1,7 @@
 import { COIN, S, api, bindFair, fmt, haptic, makeAct, rid, setBalance } from '../core.js';
 import * as fx from '../fx.js';
 import { I } from '../icons.js';
+import { t } from '../i18n.js';
 
 const RN = ['', '', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 // spade, heart, diamond, club in a 100×96 box
@@ -33,38 +34,38 @@ export default function mount(root, { initial, refresh, resync }) {
   let g = initial, sheet = null, play = null;
   const act = makeAct(render, async () => { g = await resync(); });
   if (g?.status === 'active') S.bet = g.bet;
-  const x2 = n => `${n.toFixed(2)}x`, pct = p => `${Math.round(p * 100)}%`;
+  const x2 = n => `${n.toFixed(2)}x`;
 
   function panel(active) {
     if (g && !active) return g.won
-      ? `<div class="mx won">${I.gauge}<div><small>You won</small><span class="mx-now">+${fmt(g.net)}</span></div><div class="mx-next"><small>Right guesses</small><b>${g.correct}</b></div></div>`
-      : `<div class="mx lost">${I.close}<div><small>Wrong guess</small><span class="mx-now">−${fmt(g.bet)}</span></div><div class="mx-next"><small>Right guesses</small><b>${g.correct}</b></div></div>`;
-    return `<div class="mx">${I.gauge}<div><small>Current multiplier</small><span class="mx-now">${x2(active ? g.current : 1)}</span></div>
-      <div class="mx-next"><small>Guesses</small><b>${active ? g.guesses : 0}/${cfg.maxGuesses}</b></div></div>`;
+      ? `<div class="mx won">${I.gauge}<div><small>${t('You won')}</small><span class="mx-now">+${fmt(g.net)}</span></div><div class="mx-next"><small>${t('Right guesses')}</small><b>${g.correct}</b></div></div>`
+      : `<div class="mx lost">${I.close}<div><small>${t('Wrong guess')}</small><span class="mx-now">−${fmt(g.bet)}</span></div><div class="mx-next"><small>${t('Right guesses')}</small><b>${g.correct}</b></div></div>`;
+    return `<div class="mx">${I.gauge}<div><small>${t('Current multiplier')}</small><span class="mx-now">${x2(active ? g.current : 1)}</span></div>
+      <div class="mx-next"><small>${t('Guesses')}</small><b>${active ? g.guesses : 0}/${cfg.maxGuesses}</b></div></div>`;
   }
 
   function sheetHtml() {
     if (sheet === 'help') return `
       <div class="bsheet-back" data-close><section class="bsheet" role="dialog" aria-modal="true" aria-labelledby="sheetT">
-        <header><h3 id="sheetT">${I.help}How to play</h3><button type="button" class="x" data-close aria-label="Close">${I.close}</button></header>
+        <header><h3 id="sheetT">${I.help}${t('How to play')}</h3><button type="button" class="x" data-close aria-label="${t('Close')}">${I.close}</button></header>
         <ol class="rules">
-          <li>Choose your bet: ${bets.join(', ')} coins, and press Deal. A card is turned face up.</li>
-          <li>Guess whether the next card is <b>higher or same</b>, or <b>lower or same</b>. A same rank wins either way.</li>
-          <li>2 is the lowest card and Ace the highest; suits do not matter. On an Ace you pick "Same" or "Lower"; on a 2, "Same" or "Higher".</li>
-          <li>Each button shows its chance and the multiplier you reach if right. Every right guess multiplies; a wrong one loses the bet.</li>
-          <li>Every card is drawn from a fresh deck, so counting cards does not help. You may skip a card ${cfg.maxSkips} times per round.</li>
-          <li>Cash out after any right guess. The round ends by itself after ${cfg.maxGuesses} right guesses or a ${fmt(cfg.winCap)}-coin win.</li>
+          <li>${t('Choose your bet: {bets} coins, and press Deal. A card is turned face up.', { bets: bets.join(', ') })}</li>
+          <li>${t('Guess whether the next card is <b>higher or same</b>, or <b>lower or same</b>. A same rank wins either way.')}</li>
+          <li>${t('2 is the lowest card and Ace the highest; suits do not matter. On an Ace you pick "Same" or "Lower"; on a 2, "Same" or "Higher".')}</li>
+          <li>${t('Each button shows its chance and the multiplier you reach if right. Every right guess multiplies; a wrong one loses the bet.')}</li>
+          <li>${t('Every card is drawn from a fresh deck, so counting cards does not help. You may skip a card {n} times per round.', { n: cfg.maxSkips })}</li>
+          <li>${t('Cash out after any right guess. The round ends by itself after {g} right guesses or a {c}-coin win.', { g: cfg.maxGuesses, c: fmt(cfg.winCap) })}</li>
         </ol>
-        <p class="note">Coins are virtual and have no cash value.</p>
+        <p class="note">${t('Coins are virtual and have no cash value.')}</p>
       </section></div>`;
     if (sheet === 'fair') {
       const over = g && g.status !== 'active';
       return `
       <div class="bsheet-back" data-close><section class="bsheet" role="dialog" aria-modal="true" aria-labelledby="sheetT">
-        <header><h3 id="sheetT">${I.shield}Provably fair</h3><button type="button" class="x" data-close aria-label="Close">${I.close}</button></header>
-        <p>Every card of the round is fixed by a secret seed <b>before</b> the first card is shown. You see its SHA-256 fingerprint now; the seed is revealed when the round ends, so you can check no card changed.</p>
-        <p class="mono"><small>Hash</small>${g?.seedHash ?? 'Deal to get a round hash'}</p>
-        ${over ? `<p class="mono"><small>Seed</small>${g.seed}</p><button type="button" class="ghost-btn wide" data-verify>${I.shield}Verify last round</button><p class="verify-out" data-verify-out aria-live="polite"></p>` : ''}
+        <header><h3 id="sheetT">${I.shield}${t('Provably fair')}</h3><button type="button" class="x" data-close aria-label="${t('Close')}">${I.close}</button></header>
+        <p>${t('Every card of the round is fixed by a secret seed <b>before</b> the first card is shown. You see its SHA-256 fingerprint now; the seed is revealed when the round ends, so you can check no card changed.')}</p>
+        <p class="mono" dir="ltr"><small>${t('Hash')}</small>${g?.seedHash ?? t('Deal to get a round hash')}</p>
+        ${over ? `<p class="mono" dir="ltr"><small>${t('Seed')}</small>${g.seed}</p><button type="button" class="ghost-btn wide" data-verify>${I.shield}${t('Verify last round')}</button><p class="verify-out" data-verify-out aria-live="polite"></p>` : ''}
       </section></div>`;
     }
     return '';
@@ -74,39 +75,39 @@ export default function mount(root, { initial, refresh, resync }) {
     const active = g?.status === 'active';
     const cur = g ? g.cards.at(-1) : null, trail = g ? g.cards.slice(0, -1).slice(-7) : [];
     const i = bets.indexOf(S.bet), betLocked = active || act.busy;
-    const cta = active && g.guesses ? [`${I.cash}Cash out <small>${fmt(g.cashout)}</small>`, 'cash', act.busy]
-      : active ? ['Make your guess', 'wait', true]
-      : S.user.balance < S.bet ? ['Not enough coins', '', true]
-      : [`${I.play}${g ? 'Deal again' : 'Deal'}`, '', act.busy];
+    const cta = active && g.guesses ? [`${I.cash}${t('Cash out')} <small>${fmt(g.cashout)}</small>`, 'cash', act.busy]
+      : active ? [t('Make your guess'), 'wait', true]
+      : S.user.balance < S.bet ? [t('Not enough coins'), '', true]
+      : [`${I.play}${t(g ? 'Deal again' : 'Deal')}`, '', act.busy];
     const btn = (p, arrow) => {
       const o = active ? g[p] : null;
       return `<button type="button" class="hl-pick ${p}" data-pick="${p}" ${!active || act.busy ? 'disabled' : ''}>
-        <span class="hl-arrow">${arrow}</span><b>${o ? LABEL[o.label] : p === 'hi' ? 'Higher' : 'Lower'}</b>
-        <span class="hl-mult">${o ? x2(o.multiplier) : '—'}</span><small>${o ? `${pct(o.chance)} chance` : '&nbsp;'}</small></button>`;
+        <span class="hl-arrow">${arrow}</span><b>${t(o ? LABEL[o.label] : p === 'hi' ? 'Higher' : 'Lower')}</b>
+        <span class="hl-mult">${o ? x2(o.multiplier) : '—'}</span><small>${o ? t('{n}% chance', { n: Math.round(o.chance * 100) }) : '&nbsp;'}</small></button>`;
     };
     root.innerHTML = `
       <div class="hlboard">
-        <div class="hl-trail" aria-label="Cards played">${trail.map(c => `<span class="hl-mini">${cardSvg(c)}</span>`).join('')}</div>
+        <div class="hl-trail" aria-label="${t('Cards played')}">${trail.map(c => `<span class="hl-mini">${cardSvg(c)}</span>`).join('')}</div>
         <div class="hl-table">
           <div class="hl-deck" aria-hidden="true">${BACK}${BACK}${BACK}</div>
           <div class="hl-card ${g?.status === 'busted' ? 'bad' : ''}" aria-live="polite">${cur ? cardSvg(cur) : BACK}</div>
         </div>
         <div class="hl-picks">${btn('hi', '▲')}${btn('lo', '▼')}</div>
-        <button type="button" class="hl-skip" data-pick="skip" ${!active || act.busy || !g.skipsLeft ? 'disabled' : ''}>Skip card${active ? ` · ${g.skipsLeft} left` : ''}</button>
+        <button type="button" class="hl-skip" data-pick="skip" ${!active || act.busy || !g.skipsLeft ? 'disabled' : ''}>${active ? t('Skip card · {n} left', { n: g.skipsLeft }) : t('Skip card')}</button>
       </div>
       <div class="console">
         <div class="ctl-row">
-          <div class="ctl-box bet"><span class="lbl">${I.stack}<span>Bet</span></span>
-            <button type="button" class="step-btn" data-step="-1" aria-label="Lower bet" ${betLocked || i <= 0 ? 'disabled' : ''}>${I.minus}</button>
-            <output aria-live="polite" aria-label="Bet amount">${S.bet}</output>
-            <button type="button" class="step-btn" data-step="1" aria-label="Raise bet" ${betLocked || i >= bets.length - 1 ? 'disabled' : ''}>${I.plus}</button></div>
-          <div class="ctl-box mines" aria-label="Cards 2 to Ace"><b>2–A</b><small>Ace high</small></div>
+          <div class="ctl-box bet"><span class="lbl">${I.stack}<span>${t('Bet')}</span></span>
+            <button type="button" class="step-btn" data-step="-1" aria-label="${t('Lower bet')}" ${betLocked || i <= 0 ? 'disabled' : ''}>${I.minus}</button>
+            <output aria-live="polite" aria-label="${t('Bet amount')}">${S.bet}</output>
+            <button type="button" class="step-btn" data-step="1" aria-label="${t('Raise bet')}" ${betLocked || i >= bets.length - 1 ? 'disabled' : ''}>${I.plus}</button></div>
+          <div class="ctl-box mines" aria-label="${t('Cards 2 to Ace')}"><b dir="ltr">2–A</b><small>${t('Ace high')}</small></div>
         </div>
         <div aria-live="polite">${panel(active)}</div>
         <div class="act-row">
-          <button type="button" class="icon-btn" data-help-open aria-label="How to play">${I.help}</button>
+          <button type="button" class="icon-btn" data-help-open aria-label="${t('How to play')}">${I.help}</button>
           <button type="button" class="play ${cta[1]} ${act.busy ? 'busy' : ''}" data-cta ${cta[2] ? 'disabled' : ''}>${cta[0]}</button>
-          <button type="button" class="icon-btn" data-fair aria-label="Provably fair">${I.shield}</button>
+          <button type="button" class="icon-btn" data-fair aria-label="${t('Provably fair')}">${I.shield}</button>
         </div>
       </div>
       ${sheetHtml()}`;
@@ -132,7 +133,7 @@ export default function mount(root, { initial, refresh, resync }) {
       play = () => {
         deal();
         if (g.status === 'busted') { if (fx.on) { fx.flash(); fx.shake($('.hlboard'), 10); } pop($('.mx-now'), 0.4); haptic('notificationOccurred', 'error'); }
-        else if (g.status === 'cashed') { if (fx.on) { fx.coinsTo($('.hl-card'), document.querySelector('.wallet'), 20); fx.banner('TOP WIN!', `${x2(g.multiplier)} · +${fmt(g.net)}`); } }
+        else if (g.status === 'cashed') { if (fx.on) { fx.coinsTo($('.hl-card'), document.querySelector('.wallet'), 20); fx.banner(t('TOP WIN!'), `${x2(g.multiplier)} · +${fmt(g.net)}`); } }
         else if (p !== 'skip') { pop($('.mx-now'), 0.6); pop($('.play.cash'), 0.94); haptic('impactOccurred', 'heavy'); }
       };
     });

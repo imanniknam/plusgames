@@ -1,6 +1,7 @@
 import { COIN, S, api, bindFair, fmt, haptic, makeAct, rid, setBalance } from '../core.js';
 import * as fx from '../fx.js';
 import { BOMB, GEM, I, MARK } from '../icons.js';
+import { t } from '../i18n.js';
 
 export default function mount(root, { initial, refresh, resync }) {
   const cfg = S.config.games.mines, bets = S.config.bets, SAFE = cfg.cells - cfg.mines;
@@ -14,35 +15,35 @@ export default function mount(root, { initial, refresh, resync }) {
   function panel(active) {
     const k = g?.revealed.length ?? 0;
     if (g && !active) return g.won
-      ? `<div class="mx won">${I.gauge}<div><small>You won</small><span class="mx-now">+${fmt(g.net)}</span></div><div class="mx-next"><small>Cashed at</small><b>${x2(g.multiplier)}</b></div></div>`
-      : `<div class="mx lost"><span class="mini big">${BOMB}</span><div><small>Boom!</small><span class="mx-now">−${fmt(g.bet)}</span></div><div class="mx-next"><small>Safe tiles</small><b>${g.safe}/${SAFE}</b></div></div>`;
+      ? `<div class="mx won">${I.gauge}<div><small>${t('You won')}</small><span class="mx-now">+${fmt(g.net)}</span></div><div class="mx-next"><small>${t('Cashed at')}</small><b>${x2(g.multiplier)}</b></div></div>`
+      : `<div class="mx lost"><span class="mini big">${BOMB}</span><div><small>${t('Boom!')}</small><span class="mx-now">−${fmt(g.bet)}</span></div><div class="mx-next"><small>${t('Safe tiles')}</small><b>${g.safe}/${SAFE}</b></div></div>`;
     const now = active && k ? g.multiplier : 1, next = active ? g.next : cfg.ladder[0];
-    return `<div class="mx">${I.gauge}<div><small>Current multiplier</small><span class="mx-now">${x2(now)}</span></div>
-      <div class="mx-next"><small>Next pick</small><b>${next ? x2(next) : '—'}</b></div></div>`;
+    return `<div class="mx">${I.gauge}<div><small>${t('Current multiplier')}</small><span class="mx-now">${x2(now)}</span></div>
+      <div class="mx-next"><small>${t('Next pick')}</small><b>${next ? x2(next) : '—'}</b></div></div>`;
   }
 
   function sheetHtml() {
     if (sheet === 'help') return `
       <div class="bsheet-back" data-close><section class="bsheet" role="dialog" aria-modal="true" aria-labelledby="sheetT">
-        <header><h3 id="sheetT">${I.help}How to play</h3><button type="button" class="x" data-close aria-label="Close">${I.close}</button></header>
+        <header><h3 id="sheetT">${I.help}${t('How to play')}</h3><button type="button" class="x" data-close aria-label="${t('Close')}">${I.close}</button></header>
         <ol class="rules">
-          <li>Choose your bet: ${bets.join(', ')} coins.</li>
-          <li>${cfg.mines} bombs hide among ${cfg.cells} tiles. Every safe tile raises the multiplier.</li>
-          <li>Cash out any time after the first safe tile. Hit a bomb and the bet is lost.</li>
-          <li>Clear all ${SAFE} safe tiles to win the top prize automatically.</li>
+          <li>${t('Choose your bet: {bets} coins.', { bets: bets.join(', ') })}</li>
+          <li>${t('{m} bombs hide among {c} tiles. Every safe tile raises the multiplier.', { m: cfg.mines, c: cfg.cells })}</li>
+          <li>${t('Cash out any time after the first safe tile. Hit a bomb and the bet is lost.')}</li>
+          <li>${t('Clear all {n} safe tiles to win the top prize automatically.', { n: SAFE })}</li>
         </ol>
-        <table class="ladder-t"><thead><tr><th>Safe tiles</th><th>Multiplier</th><th>Pays (${S.bet}${COIN})</th></tr></thead>
+        <table class="ladder-t"><thead><tr><th>${t('Safe tiles')}</th><th>${t('Multiplier')}</th><th>${t('Pays ({n})', { n: S.bet + COIN })}</th></tr></thead>
           <tbody>${cfg.ladder.map((m, i) => `<tr class="${g?.status === 'active' && i === g.revealed.length ? 'next' : ''}"><td>${i + 1}</td><td>${x2(m)}</td><td>${fmt(Math.round(S.bet * m * 100) / 100)}</td></tr>`).join('')}</tbody></table>
-        <p class="note">Coins are virtual and have no cash value.</p>
+        <p class="note">${t('Coins are virtual and have no cash value.')}</p>
       </section></div>`;
     if (sheet === 'fair') {
       const over = g && g.status !== 'active';
       return `
       <div class="bsheet-back" data-close><section class="bsheet" role="dialog" aria-modal="true" aria-labelledby="sheetT">
-        <header><h3 id="sheetT">${I.shield}Provably fair</h3><button type="button" class="x" data-close aria-label="Close">${I.close}</button></header>
-        <p>The bombs are placed by a secret seed <b>before</b> you play. You see its SHA-256 fingerprint now; the seed is revealed when the round ends, so you can check nothing changed.</p>
-        <p class="mono"><small>Hash</small>${g?.seedHash ?? 'Place a bet to get a round hash'}</p>
-        ${over ? `<p class="mono"><small>Seed</small>${g.seed}</p><button type="button" class="ghost-btn wide" data-verify>${I.shield}Verify last round</button><p class="verify-out" data-verify-out aria-live="polite"></p>` : ''}
+        <header><h3 id="sheetT">${I.shield}${t('Provably fair')}</h3><button type="button" class="x" data-close aria-label="${t('Close')}">${I.close}</button></header>
+        <p>${t('The bombs are placed by a secret seed <b>before</b> you play. You see its SHA-256 fingerprint now; the seed is revealed when the round ends, so you can check nothing changed.')}</p>
+        <p class="mono" dir="ltr"><small>${t('Hash')}</small>${g?.seedHash ?? t('Place a bet to get a round hash')}</p>
+        ${over ? `<p class="mono" dir="ltr"><small>${t('Seed')}</small>${g.seed}</p><button type="button" class="ghost-btn wide" data-verify>${I.shield}${t('Verify last round')}</button><p class="verify-out" data-verify-out aria-live="polite"></p>` : ''}
       </section></div>`;
     }
     return '';
@@ -53,32 +54,32 @@ export default function mount(root, { initial, refresh, resync }) {
     let cells = '';
     for (let c = 0; c < cfg.cells; c++) {
       const opened = g?.revealed.includes(c), mine = over && g.mines.includes(c);
-      const [cls, art, label] = opened && mine ? ['is-boom', BOMB, 'Bomb'] : opened ? ['is-gem', GEM, 'Safe']
-        : mine ? ['is-ghost mine', BOMB, 'Bomb'] : over ? ['is-ghost', GEM, 'Safe'] : ['', MARK, `Tile ${c + 1}`];
+      const [cls, art, label] = opened && mine ? ['is-boom', BOMB, t('Bomb')] : opened ? ['is-gem', GEM, t('Safe')]
+        : mine ? ['is-ghost mine', BOMB, t('Bomb')] : over ? ['is-ghost', GEM, t('Safe')] : ['', MARK, t('Tile {n}', { n: c + 1 })];
       const state = c === pending ? 'pending' : c === fresh ? 'new' : '';
       cells += `<button type="button" class="tile ${cls} ${state}" data-cell="${c}" ${!active || opened || act.busy ? 'disabled' : ''} aria-label="${label}">${art}</button>`;
     }
     const i = bets.indexOf(S.bet), betLocked = (active && k > 0) || act.busy;
-    const cta = active && k ? [`${I.cash}Cash out <small>${fmt(g.cashout)}</small>`, 'cash', act.busy]
-      : active ? ['Pick a tile', 'wait', true]
-      : S.user.balance < S.bet ? ['Not enough coins', '', true]
-      : [`${I.play}${g ? 'Play again' : 'Play'}`, '', act.busy];
+    const cta = active && k ? [`${I.cash}${t('Cash out')} <small>${fmt(g.cashout)}</small>`, 'cash', act.busy]
+      : active ? [t('Pick a tile'), 'wait', true]
+      : S.user.balance < S.bet ? [t('Not enough coins'), '', true]
+      : [`${I.play}${t(g ? 'Play again' : 'Play')}`, '', act.busy];
     root.innerHTML = `
       <div class="mboard"><div class="mgrid ${g ? '' : 'idle'}">${cells}</div></div>
       <div class="console">
         <div class="ctl-row">
-          <div class="ctl-box bet"><span class="lbl">${I.stack}<span>Bet</span></span>
-            <button type="button" class="step-btn" data-step="-1" aria-label="Lower bet" ${betLocked || i <= 0 ? 'disabled' : ''}>${I.minus}</button>
-            <output aria-live="polite" aria-label="Bet amount">${S.bet}</output>
-            <button type="button" class="step-btn" data-step="1" aria-label="Raise bet" ${betLocked || i >= bets.length - 1 ? 'disabled' : ''}>${I.plus}</button></div>
-          <div class="ctl-box mines" aria-label="${cfg.mines} mines in ${cfg.cells} tiles"><span class="mini">${BOMB}</span><b>${cfg.mines}</b><small>/ ${cfg.cells}</small></div>
+          <div class="ctl-box bet"><span class="lbl">${I.stack}<span>${t('Bet')}</span></span>
+            <button type="button" class="step-btn" data-step="-1" aria-label="${t('Lower bet')}" ${betLocked || i <= 0 ? 'disabled' : ''}>${I.minus}</button>
+            <output aria-live="polite" aria-label="${t('Bet amount')}">${S.bet}</output>
+            <button type="button" class="step-btn" data-step="1" aria-label="${t('Raise bet')}" ${betLocked || i >= bets.length - 1 ? 'disabled' : ''}>${I.plus}</button></div>
+          <div class="ctl-box mines" aria-label="${t('{m} mines in {c} tiles', { m: cfg.mines, c: cfg.cells })}"><span class="mini">${BOMB}</span><b>${cfg.mines}</b><small>/ ${cfg.cells}</small></div>
         </div>
         <div aria-live="polite">${panel(active)}</div>
-        <div class="pips" aria-label="${k} of ${SAFE} safe tiles">${Array.from({ length: SAFE }, (_, j) => `<i class="pip ${j < k || (over && j < g.safe) ? 'done' : ''} ${active && j === k ? 'next' : ''}"></i>`).join('')}</div>
+        <div class="pips" aria-label="${t('{k} of {n} safe tiles', { k, n: SAFE })}">${Array.from({ length: SAFE }, (_, j) => `<i class="pip ${j < k || (over && j < g.safe) ? 'done' : ''} ${active && j === k ? 'next' : ''}"></i>`).join('')}</div>
         <div class="act-row">
-          <button type="button" class="icon-btn" data-random aria-label="Open a random tile" ${!active || act.busy ? 'disabled' : ''}>${I.dice}</button>
+          <button type="button" class="icon-btn" data-random aria-label="${t('Open a random tile')}" ${!active || act.busy ? 'disabled' : ''}>${I.dice}</button>
           <button type="button" class="play ${cta[1]} ${act.busy ? 'busy' : ''}" data-cta ${cta[2] ? 'disabled' : ''}>${cta[0]}</button>
-          <button type="button" class="icon-btn" data-fair aria-label="Provably fair">${I.shield}</button>
+          <button type="button" class="icon-btn" data-fair aria-label="${t('Provably fair')}">${I.shield}</button>
         </div>
       </div>
       ${sheetHtml()}`;
@@ -117,7 +118,7 @@ export default function mount(root, { initial, refresh, resync }) {
     fx.gsap.to($$('.tile.is-gem'), { scale: 1.12, duration: 0.18, yoyo: true, repeat: 1, stagger: 0.05, ease: 'power2.out' });
     unveil('center', 0.25);
     pop($('.mx-now'), 0.4);
-    if (g.multiplier >= 5.7) { fx.confetti(g.multiplier >= 34.2 ? 110 : 60); fx.banner(g.multiplier >= 34.2 ? 'MAX WIN!' : 'BIG WIN!', `${x2(g.multiplier)} · +${fmt(g.net)}`); }
+    if (g.multiplier >= 5.7) { fx.confetti(g.multiplier >= 34.2 ? 110 : 60); fx.banner(t(g.multiplier >= 34.2 ? 'MAX WIN!' : 'BIG WIN!'), `${x2(g.multiplier)} · +${fmt(g.net)}`); }
   }
 
   // wins count the balance up as the coins land
