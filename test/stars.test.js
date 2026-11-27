@@ -139,6 +139,26 @@ test('refund: takes the coins back once and never goes below zero', async () => 
   assert.equal(await balance(d), 0);
 });
 
+test('bot: /start asks the language once, the pick is saved and shared with the app', async () => {
+  const c = client(), say = text => { calls.length = 0; return hook({ message: { text, chat: { id: c.uid }, from: { id: c.uid, first_name: 'L' } } }); };
+  const sent = () => calls.filter(x => x.method === 'sendMessage').map(x => x.body);
+  await say('/start');
+  assert.deepEqual(sent()[0].reply_markup.keyboard, [[{ text: 'فارسی' }, { text: 'English' }]]);
+  assert.equal((await c('GET', '/state')).user.lang, null);
+  await say('فارسی');
+  assert.ok(sent()[0].reply_markup.remove_keyboard);
+  assert.match(sent()[1].text, /پلاس گیمز/);
+  assert.ok(sent()[1].reply_markup.inline_keyboard.flat().some(b => b.text.includes('پنالتی')));
+  assert.equal((await c('GET', '/state')).user.lang, 'fa');
+  await say('/start'); // already chose: straight to the games, in Persian
+  assert.equal(sent().length, 1); assert.match(sent()[0].text, /پلاس گیمز/);
+  await say('/terms'); assert.match(sent()[0].text, /سکه/);
+  await say('/language'); assert.ok(sent()[0].reply_markup.keyboard);
+  assert.equal((await c('POST', '/lang', { lang: 'en' })).lang, 'en');
+  await say('/start'); assert.match(sent()[0].text, /Plus Games/);
+  assert.equal((await c('POST', '/lang', { lang: 'de' })).status, 400);
+});
+
 test('webhook secret still guards payment updates', async () => {
   const r = await realFetch(origin + '/bot', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: { successful_payment: {} } }) });
   assert.equal(r.status, 401);

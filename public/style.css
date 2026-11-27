@@ -1,5 +1,6 @@
 /* ===== Plus Games · Neon Arcade ===== */
 /* two Poppins weights only: 600 renders as 700, 800 as 700 (fewer font requests on slow networks) */
+@font-face { font-family: Vazirmatn; font-weight: 100 900; font-display: swap; src: url(fonts/vazirmatn-arabic.woff2) format('woff2'); unicode-range: U+0600-06FF, U+0750-077F, U+08A0-08FF, U+200C-200E, U+FB50-FDFF, U+FE70-FEFC; }
 @font-face { font-family: Poppins; font-weight: 500; font-display: swap; src: url(fonts/poppins-500.woff2) format('woff2'); }
 @font-face { font-family: Poppins; font-weight: 700; font-display: swap; src: url(fonts/poppins-700.woff2) format('woff2'); }
 
@@ -12,7 +13,7 @@
   --grad-cash: linear-gradient(90deg, #ff4fd8, #ec4899 45%, #a855f7);
   --glow-p: 0 0 18px rgba(168,85,247,.55); --glow-b: 0 0 16px rgba(6,182,212,.55); --glow-k: 0 0 18px rgba(236,72,153,.6);
   --r: 16px; --nav-h: 64px;
-  --font: Poppins, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: Poppins, Vazirmatn, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
@@ -41,7 +42,7 @@ button:disabled { opacity: .45; cursor: default; }
 .top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 12px 0 10px; background: linear-gradient(var(--bg) 70%, transparent); }
 .logo { font-weight: 800; font-size: 22px; font-style: italic; letter-spacing: -1px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 8px rgba(168,85,247,.7)); }
 .back { width: 34px; height: 34px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 22px; line-height: 1; }
-.wallet { margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.wallet { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-variant-numeric: tabular-nums; }
 .coin { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 800; color: #04263a; background: radial-gradient(circle at 35% 30%, #a5f3fc, #06b6d4); box-shadow: 0 0 8px rgba(6,182,212,.7); flex: none; }
 .wallet b { font-size: 15px; font-weight: 700; transition: color .3s; }
 .wallet b.up { color: var(--win); } .wallet b.down { color: var(--lose); }
@@ -85,7 +86,7 @@ button:disabled { opacity: .45; cursor: default; }
 .hello { display: flex; align-items: center; gap: 12px; padding: 14px; margin-top: 4px; }
 .avatar { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; flex: none; background: linear-gradient(135deg, #312e81, #6d28d9); border: 2px solid var(--purple); box-shadow: var(--glow-p); }
 .hello small { color: var(--text2); display: block; } .hello b { font-size: 18px; }
-.lvl { margin-left: auto; text-align: right; font-size: 11px; color: var(--text2); }
+.lvl { margin-inline-start: auto; text-align: end; font-size: 11px; color: var(--text2); }
 .lvl i { display: block; width: 70px; height: 5px; border-radius: 9px; background: var(--surface2); margin-top: 4px; overflow: hidden; }
 .lvl i::after { content: ''; display: block; height: 100%; width: var(--p, 0%); background: linear-gradient(90deg, var(--green), #a3e635); box-shadow: 0 0 6px var(--green); }
 .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
@@ -138,9 +139,9 @@ button:disabled { opacity: .45; cursor: default; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
 .stats div { padding: 10px 4px; text-align: center; } .stats b { display: block; font-size: 16px; } .stats small { color: var(--text2); font-size: 10.5px; }
 .menu { display: grid; gap: 8px; margin-top: 14px; }
-.menu button { display: flex; align-items: center; gap: 12px; padding: 14px; text-align: left; font-weight: 600; }
+.menu button { display: flex; align-items: center; gap: 12px; padding: 14px; text-align: start; font-weight: 600; }
 .menu button span:first-child { font-size: 18px; width: 22px; text-align: center; }
-.menu button span:last-child { margin-left: auto; color: var(--muted); }
+.menu button span:last-child { margin-inline-start: auto; color: var(--muted); }
 .sheet p { color: var(--text2); margin: 6px 0; font-size: 13px; }
 
 /* ===== game screen shell ===== */
@@ -160,7 +161,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* bet control */
 .betbox { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 12px; }
-.betbox label { color: var(--text2); font-size: 11.5px; margin-right: auto; display: flex; flex-direction: column; }
+.betbox label { color: var(--text2); font-size: 11.5px; margin-inline-end: auto; display: flex; flex-direction: column; }
 .betbox label b { color: var(--text); font-size: 18px; display: flex; align-items: center; gap: 6px; }
 .chip { min-width: 52px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); font-weight: 700; }
 .chip[aria-checked="true"] { border-color: var(--blue); color: #a5f3fc; box-shadow: var(--glow-b); }
@@ -233,7 +234,7 @@ button:disabled { opacity: .45; cursor: default; }
 .sky[data-phase="crashed"] .big b { color: #fca5a5; text-shadow: 0 0 22px rgba(239,68,68,.9); }
 .sky[data-phase="cashed"] .big b { color: #86efac; text-shadow: 0 0 22px rgba(34,197,94,.9); }
 .auto { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 10px; color: var(--text2); font-size: 12.5px; }
-.auto .grow { margin-right: auto; }
+.auto .grow { margin-inline-end: auto; }
 .auto input[type=number] { width: 74px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px; text-align: center; font-weight: 700; }
 .switch { position: relative; width: 40px; height: 22px; flex: none; }
 .switch input { opacity: 0; position: absolute; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
@@ -763,3 +764,16 @@ body.in-game .pkboard.ps { flex: 1 0 auto; height: auto; min-height: 250px; marg
 .pack .price { display: flex; align-items: center; justify-content: center; gap: 5px; color: #fde68a; border-color: rgba(250,204,21,.45); }
 .pack .price .ic { width: 16px; height: 16px; }
 .pack.busy { opacity: .6; pointer-events: none; }
+
+/* ---------- Persian (right to left) ---------- */
+[dir=rtl] body { line-height: 1.6; }
+/* game boards, multipliers and hashes keep their left-to-right geometry */
+[dir=rtl] .mboard, [dir=rtl] .pkboard, [dir=rtl] .hlboard, [dir=rtl] .pips, [dir=rtl] .ps-score, [dir=rtl] .ladder-t td, [dir=rtl] .mono { direction: ltr; }
+[dir=rtl] .hl-pick, [dir=rtl] .hl-skip, [dir=rtl] .ps-word { direction: rtl; }
+[dir=rtl] .chev .ic, [dir=rtl] .menu .ic:last-child, [dir=rtl] .back .ic { transform: scaleX(-1); }
+/* Persian has no italic: slanted Arabic script reads as broken */
+[dir=rtl] .brand b, [dir=rtl] .fx-banner b, [dir=rtl] .splash h1, [dir=rtl] .ghead h2, [dir=rtl] .sec-title { font-style: normal; letter-spacing: 0; }
+.lang-row { display: flex; gap: 10px; justify-content: center; margin: 6px 0; }
+.lang-btn { min-width: 120px; min-height: 48px; padding: 10px 18px; border-radius: 14px; border: 1px solid rgba(168,85,247,.45); background: rgba(124,58,237,.18); font-weight: 700; font-size: 16px; cursor: pointer; }
+.lang-btn.on { background: linear-gradient(135deg, #7c3aed, #2563eb 60%, #06b6d4); border-color: transparent; }
+.lang-q { text-align: center; margin: 0 0 10px; color: var(--muted, #a1a1c2); }

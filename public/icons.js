@@ -20,6 +20,7 @@ export const I = {
   lock: icon('<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>'),
   star: `<svg class="ic star-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.7.8-5 4.6 1.4 6.6-6-3.4-6 3.4 1.4-6.6-5-4.6 6.7-.8z" fill="#facc15" stroke="#ca8a04" stroke-width="1" stroke-linejoin="round"/></svg>`,
   chevron: icon('<path d="M9 6l6 6-6 6"/>'),
+  globe: icon('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>'),
   minus: icon('<path d="M6 12h12"/>', 'stroke-width="2.4"'),
   plus: icon('<path d="M12 6v12M6 12h12"/>', 'stroke-width="2.4"'),
 };

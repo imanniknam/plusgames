@@ -1,10 +1,11 @@
 import { COIN, S, api, bindFair, fmt, haptic, makeAct, rid, setBalance } from '../core.js';
 import * as fx from '../fx.js';
 import { I } from '../icons.js';
+import { t } from '../i18n.js';
 
 // corner centres inside the goal mouth, in % of its box: top-left, top-right, middle, bottom-left, bottom-right
 const Z = [[14, 26], [86, 26], [50, 44], [14, 72], [86, 72]];
-const ZNAME = ['top left', 'top right', 'middle', 'bottom left', 'bottom right'];
+const ZNAME = ['top left', 'top right', 'middle', 'bottom left', 'bottom right']; // English keys for t()
 
 const BALL = `<svg viewBox="0 0 48 48" aria-hidden="true"><defs>
   <radialGradient id="psBall" cx=".36" cy=".3" r=".78"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#eef1f7"/><stop offset="1" stop-color="#9aa3b8"/></radialGradient>
@@ -64,17 +65,17 @@ export default function mount(root, { initial, refresh, resync }) {
 
   function panel(active) {
     if (g && !active) return g.won
-      ? `<div class="mx won">${I.gauge}<div><small>You won</small><span class="mx-now">+${fmt(g.net)}</span></div><div class="mx-next"><small>Goals</small><b>${g.goals}/${N}</b></div></div>`
-      : `<div class="mx lost">${I.shield}<div><small>Saved</small><span class="mx-now">−${fmt(g.bet)}</span></div><div class="mx-next"><small>Goals</small><b>${g.goals}/${N}</b></div></div>`;
+      ? `<div class="mx won">${I.gauge}<div><small>${t('You won')}</small><span class="mx-now">+${fmt(g.net)}</span></div><div class="mx-next"><small>${t('Goals')}</small><b>${g.goals}/${N}</b></div></div>`
+      : `<div class="mx lost">${I.shield}<div><small>${t('Saved')}</small><span class="mx-now">−${fmt(g.bet)}</span></div><div class="mx-next"><small>${t('Goals')}</small><b>${g.goals}/${N}</b></div></div>`;
     const k = active ? g.goals : 0;
-    return `<div class="mx">${I.gauge}<div><small>Current multiplier</small><span class="mx-now">${x2(k ? g.multiplier : 1)}</span></div>
-      <div class="mx-next"><small>Next goal</small><b>${x2(active ? g.next : cfg.ladder[0])}</b></div></div>`;
+    return `<div class="mx">${I.gauge}<div><small>${t('Current multiplier')}</small><span class="mx-now">${x2(k ? g.multiplier : 1)}</span></div>
+      <div class="mx-next"><small>${t('Next goal')}</small><b>${x2(active ? g.next : cfg.ladder[0])}</b></div></div>`;
   }
 
   // shootout scoreboard: one slot per shot with its multiplier
   function scoreboard() {
     const shots = g?.shots ?? [], active = g?.status === 'active';
-    return `<div class="ps-score" aria-label="${g?.goals ?? 0} goals of ${N}">${cfg.ladder.map((m, s) => {
+    return `<div class="ps-score" aria-label="${t('{k} goals of {n}', { k: g?.goals ?? 0, n: N })}">${cfg.ladder.map((m, s) => {
       const taken = s < shots.length, saved = taken && g.keepers[s] === shots[s];
       const st = saved ? 'saved' : taken ? 'goal' : active && s === shots.length ? 'next' : '';
       return `<span class="ps-slot ${st}"><i>${saved ? I.close : taken ? '✓' : s + 1}</i><b>${x2(m)}</b></span>`;
@@ -84,26 +85,26 @@ export default function mount(root, { initial, refresh, resync }) {
   function sheetHtml() {
     if (sheet === 'help') return `
       <div class="bsheet-back" data-close><section class="bsheet" role="dialog" aria-modal="true" aria-labelledby="sheetT">
-        <header><h3 id="sheetT">${I.help}How to play</h3><button type="button" class="x" data-close aria-label="Close">${I.close}</button></header>
+        <header><h3 id="sheetT">${I.help}${t('How to play')}</h3><button type="button" class="x" data-close aria-label="${t('Close')}">${I.close}</button></header>
         <ol class="rules">
-          <li>Choose your bet: ${bets.join(', ')} coins, and press Play.</li>
-          <li>Tap one of the ${cfg.zones} glowing corners to shoot. Each goal raises the multiplier.</li>
-          <li>The keeper dives to one corner per shot. Shoot where he goes and the bet is lost.</li>
-          <li>Where you aim does not change your chances: every shot scores 4 times in 5.</li>
-          <li>Cash out after any goal. Five goals pay the top prize automatically.</li>
+          <li>${t('Choose your bet: {bets} coins, and press Play.', { bets: bets.join(', ') })}</li>
+          <li>${t('Tap one of the {n} glowing corners to shoot. Each goal raises the multiplier.', { n: cfg.zones })}</li>
+          <li>${t('The keeper dives to one corner per shot. Shoot where he goes and the bet is lost.')}</li>
+          <li>${t('Where you aim does not change your chances: every shot scores 4 times in 5.')}</li>
+          <li>${t('Cash out after any goal. Five goals pay the top prize automatically.')}</li>
         </ol>
-        <table class="ladder-t"><thead><tr><th>Goals</th><th>Multiplier</th><th>Pays (${S.bet}${COIN})</th></tr></thead>
+        <table class="ladder-t"><thead><tr><th>${t('Goals')}</th><th>${t('Multiplier')}</th><th>${t('Pays ({n})', { n: S.bet + COIN })}</th></tr></thead>
           <tbody>${cfg.ladder.map((m, i) => `<tr class="${g?.status === 'active' && i === g.goals ? 'next' : ''}"><td>${i + 1}</td><td>${x2(m)}</td><td>${fmt(Math.round(S.bet * m * 100) / 100)}</td></tr>`).join('')}</tbody></table>
-        <p class="note">Coins are virtual and have no cash value.</p>
+        <p class="note">${t('Coins are virtual and have no cash value.')}</p>
       </section></div>`;
     if (sheet === 'fair') {
       const over = g && g.status !== 'active';
       return `
       <div class="bsheet-back" data-close><section class="bsheet" role="dialog" aria-modal="true" aria-labelledby="sheetT">
-        <header><h3 id="sheetT">${I.shield}Provably fair</h3><button type="button" class="x" data-close aria-label="Close">${I.close}</button></header>
-        <p>The keeper's five dives are fixed by a secret seed <b>before</b> your first shot. You see its SHA-256 fingerprint now; the seed is revealed when the round ends, so you can check nothing changed.</p>
-        <p class="mono"><small>Hash</small>${g?.seedHash ?? 'Place a bet to get a round hash'}</p>
-        ${over ? `<p class="mono"><small>Seed</small>${g.seed}</p><button type="button" class="ghost-btn wide" data-verify>${I.shield}Verify last round</button><p class="verify-out" data-verify-out aria-live="polite"></p>` : ''}
+        <header><h3 id="sheetT">${I.shield}${t('Provably fair')}</h3><button type="button" class="x" data-close aria-label="${t('Close')}">${I.close}</button></header>
+        <p>${t('The keeper\'s five dives are fixed by a secret seed <b>before</b> your first shot. You see its SHA-256 fingerprint now; the seed is revealed when the round ends, so you can check nothing changed.')}</p>
+        <p class="mono" dir="ltr"><small>${t('Hash')}</small>${g?.seedHash ?? t('Place a bet to get a round hash')}</p>
+        ${over ? `<p class="mono" dir="ltr"><small>${t('Seed')}</small>${g.seed}</p><button type="button" class="ghost-btn wide" data-verify>${I.shield}${t('Verify last round')}</button><p class="verify-out" data-verify-out aria-live="polite"></p>` : ''}
       </section></div>`;
     }
     return '';
@@ -112,10 +113,10 @@ export default function mount(root, { initial, refresh, resync }) {
   function render() {
     const active = g?.status === 'active', k = active ? g.goals : 0;
     const i = bets.indexOf(S.bet), betLocked = active || act.busy;
-    const cta = active && k ? [`${I.cash}Cash out <small>${fmt(g.cashout)}</small>`, 'cash', act.busy]
-      : active ? ['Tap a corner', 'wait', true]
-      : S.user.balance < S.bet ? ['Not enough coins', '', true]
-      : [`${I.play}${g ? 'Play again' : 'Play'}`, '', act.busy];
+    const cta = active && k ? [`${I.cash}${t('Cash out')} <small>${fmt(g.cashout)}</small>`, 'cash', act.busy]
+      : active ? [t('Tap a corner'), 'wait', true]
+      : S.user.balance < S.bet ? [t('Not enough coins'), '', true]
+      : [`${I.play}${t(g ? 'Play again' : 'Play')}`, '', act.busy];
     // after the round: where each shot went (green = goal, red = saved)
     const marks = g && !active ? g.shots.map((z, s) => `<i class="ps-mark ${g.keepers[s] === z ? 'saved' : 'goal'}" style="left:${Z[z][0]}%;top:${Z[z][1]}%"></i>`).join('') : '';
     // after a save the keeper stays where he dived (his box is 26% of the goal wide, centred 67% down it)
@@ -132,24 +133,24 @@ export default function mount(root, { initial, refresh, resync }) {
         <div class="ps-grass" aria-hidden="true"></div>
         ${scoreboard()}
         <div class="ps-goalbox">${GOAL}${LINES}
-          ${Z.map(([x, y], z) => `<button type="button" class="ps-zone ${aim === z ? 'aim' : ''}" data-zone="${z}" style="left:${x}%;top:${y}%" aria-label="Shoot ${ZNAME[z]}" ${!active || act.busy ? 'disabled' : ''}><i></i></button>`).join('')}
+          ${Z.map(([x, y], z) => `<button type="button" class="ps-zone ${aim === z ? 'aim' : ''}" data-zone="${z}" style="left:${x}%;top:${y}%" aria-label="${t('Shoot {z}', { z: t(ZNAME[z]) })}" ${!active || act.busy ? 'disabled' : ''}><i></i></button>`).join('')}
           ${marks}<div class="ps-keeper" ${keeperPose}>${KEEPER}</div></div>
         <div class="ps-shadow" aria-hidden="true"></div><div class="ps-ball">${BALL}</div>
         <div class="ps-word" aria-hidden="true"></div>
       </div>
       <div class="console">
         <div class="ctl-row">
-          <div class="ctl-box bet"><span class="lbl">${I.stack}<span>Bet</span></span>
-            <button type="button" class="step-btn" data-step="-1" aria-label="Lower bet" ${betLocked || i <= 0 ? 'disabled' : ''}>${I.minus}</button>
-            <output aria-live="polite" aria-label="Bet amount">${S.bet}</output>
-            <button type="button" class="step-btn" data-step="1" aria-label="Raise bet" ${betLocked || i >= bets.length - 1 ? 'disabled' : ''}>${I.plus}</button></div>
-          <div class="ctl-box mines" aria-label="Goal chance 80 percent per shot"><b>80%</b><small>per shot</small></div>
+          <div class="ctl-box bet"><span class="lbl">${I.stack}<span>${t('Bet')}</span></span>
+            <button type="button" class="step-btn" data-step="-1" aria-label="${t('Lower bet')}" ${betLocked || i <= 0 ? 'disabled' : ''}>${I.minus}</button>
+            <output aria-live="polite" aria-label="${t('Bet amount')}">${S.bet}</output>
+            <button type="button" class="step-btn" data-step="1" aria-label="${t('Raise bet')}" ${betLocked || i >= bets.length - 1 ? 'disabled' : ''}>${I.plus}</button></div>
+          <div class="ctl-box mines" aria-label="${t('Goal chance 80 percent per shot')}"><b>80%</b><small>${t('per shot')}</small></div>
         </div>
         <div aria-live="polite">${panel(active)}</div>
         <div class="act-row">
-          <button type="button" class="icon-btn" data-random aria-label="Shoot a random corner" ${!active || act.busy ? 'disabled' : ''}>${I.dice}</button>
+          <button type="button" class="icon-btn" data-random aria-label="${t('Shoot a random corner')}" ${!active || act.busy ? 'disabled' : ''}>${I.dice}</button>
           <button type="button" class="play ${cta[1]} ${act.busy ? 'busy' : ''}" data-cta ${cta[2] ? 'disabled' : ''}>${cta[0]}</button>
-          <button type="button" class="icon-btn" data-fair aria-label="Provably fair">${I.shield}</button>
+          <button type="button" class="icon-btn" data-fair aria-label="${t('Provably fair')}">${I.shield}</button>
         </div>
       </div>
       ${sheetHtml()}`;
@@ -216,11 +217,11 @@ export default function mount(root, { initial, refresh, resync }) {
       $('.ps-net')?.animate([{ transform: 'none' }, { transform: 'scale(1.04, 1.06) translateY(-2px)' }, { transform: 'scale(.99)' }, { transform: 'none' }],
         { duration: 520, easing: 'ease-out', transformOrigin: '50% 60%' });
       ball.animate([{ transform: `translate(${dx}px, ${dy}px) scale(.5)` }, { transform: `translate(${dx}px, ${dy + 22}px) scale(.46)` }], { duration: 300, easing: 'cubic-bezier(.5,0,.5,1)', fill: 'forwards' });
-      word('GOAL!', 'goal');
+      word(t('GOAL!'), 'goal');
     } else {
       ball.animate([{ transform: `translate(${dx}px, ${dy}px) scale(.5)` }, { transform: `translate(${dx * 0.55 + (dx >= 0 ? 70 : -70)}px, ${dy * 0.25}px) rotate(200deg) scale(.7)`, opacity: 0 }],
         { duration: 460, easing: 'ease-out', fill: 'forwards' });
-      word('SAVED!', 'saved');
+      word(t('SAVED!'), 'saved');
     }
     await wait(scored ? 650 : 600);
   }
@@ -230,7 +231,7 @@ export default function mount(root, { initial, refresh, resync }) {
     if (!fx.on) return;
     fx.coinsTo(fromEl, document.querySelector('.wallet'), Math.min(24, 8 + g.goals * 3));
     pop($('.mx-now'), 0.4);
-    if (g.goals === N) { fx.confetti(90); fx.banner('PERFECT 5/5!', `${x2(g.multiplier)} · +${fmt(g.net)}`); }
+    if (g.goals === N) { fx.confetti(90); fx.banner(t('PERFECT 5/5!'), `${x2(g.multiplier)} · +${fmt(g.net)}`); }
   }
 
   const after = r => {
